@@ -306,51 +306,42 @@ for code in ["DGFACOHM","DGFACBNF12"]:
             finance_stats.append(change)
 
 st.markdown("**Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
-st.header("Markets Dashboard (Yahoo Finance)")
 
-# ----------- Helper -----------
-def plot_yf(ticker, title, period="5y", freq="1mo"):
-    data = yf.download(ticker, period=period, interval=freq)
-    data = data.dropna()
-    fig, ax = plt.subplots(figsize=(7,4))
-    ax.plot(data.index, data["Close"], label=title)
-    ax.set_title(title)
-    ax.set_ylabel("Index / FX")
-    ax.set_xlabel("Date")
-    ax.legend()
-    ax.grid(True)
-    st.pyplot(fig)
-
-# ----------- FX ----------- 
-st.subheader("Exchange Rates")
-col1, col2 = st.columns(2)
-with col1:
-    plot_yf("AUDUSD=X", "AUD/USD (FX rate)")
-with col2:
-    plot_yf("AUDGBP=X", "AUD/GBP (FX rate)")
-
-# ----------- Equities ----------- 
-st.subheader("Equity Indices")
-col1, col2 = st.columns(2)
-with col1:
-    plot_yf("^AXJO", "ASX200 Index")
-with col2:
-    plot_yf("^GSPC", "S&P500 Index")
-
-# ----------- YoY % Change ----------- 
+# --- Section: YoY % change in equities ---
 st.subheader("YoY Change in Equity Indices")
+yoy_stats = []
 
-for ticker, name in [("^AXJO","ASX200"),("^GSPC","S&P500")]:
-    data = yf.download(ticker, period="5y", interval="1mo")["Close"].dropna()
+col1, col2 = st.columns(2)
+
+with col1:
+    data = yf.download("^AXJO", period="5y", interval="1mo")["Close"].dropna()
     yoy = data.pct_change(periods=12) * 100
     fig, ax = plt.subplots(figsize=(7,4))
-    ax.plot(yoy.index, yoy, label=f"{name} YoY Change (%)")
-    ax.set_title(f"{name} YoY Change")
+    ax.plot(yoy.index, yoy, label="ASX200 YoY Change (%)")
+    ax.set_title("ASX200 YoY Change")
     ax.axhline(0, color="gray", linestyle="--")
     ax.set_ylabel("%")
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
+    if len(yoy) > 0:
+        yoy_stats.append(f"ASX200 latest YoY change: {yoy.iloc[-1]:+.2f}%")
+
+with col2:
+    data = yf.download("^GSPC", period="5y", interval="1mo")["Close"].dropna()
+    yoy = data.pct_change(periods=12) * 100
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.plot(yoy.index, yoy, label="S&P500 YoY Change (%)")
+    ax.set_title("S&P500 YoY Change")
+    ax.axhline(0, color="gray", linestyle="--")
+    ax.set_ylabel("%")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+    if len(yoy) > 0:
+        yoy_stats.append(f"S&P500 latest YoY change: {yoy.iloc[-1]:+.2f}%")
+
 st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
+
 
 st.caption("Data source: Reserve Bank of Australia Statistical Tables. Figures computed from public XLSX files at run-time.")
