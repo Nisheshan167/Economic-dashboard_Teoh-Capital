@@ -5,9 +5,7 @@ import requests
 from io import BytesIO
 from openai import OpenAI
 import yfinance as yf
-import matplotlib.pyplot as plt
-import streamlit as st
-import pandas as pd
+import numpy as np
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
@@ -124,7 +122,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             activity_stats.append(change)
 
-st.markdown("**Summary:** " + explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels"))
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels"))
 
 # =========================================================
 # 2) Key macro metrics (H1, G1, F1)
@@ -154,7 +152,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             macro_stats.append(change)
 
-st.markdown("**Summary:** " + explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics"))
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics"))
 
 # =========================================================
 # 3) Inflation detail (G2)
@@ -187,7 +185,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             inflation_stats.append(change)
 
-st.markdown("**Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
 
 # =========================================================
 # 4) Labour market (H5, H4)
@@ -215,7 +213,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             labour_stats.append(change)
 
-st.markdown("**Summary:** " + explain_with_gpt("\n".join(labour_stats), "Labour Market"))
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(labour_stats), "Labour Market"))
 
 # =========================================================
 # 5) Household finance
@@ -228,7 +226,6 @@ e13 = clamp_period(load_rba_table("E13"))
 f6 = clamp_period(load_rba_table("F6"))
 d1 = clamp_period(load_rba_table("D1"))
 
-# Derived ratios
 merged = pd.merge(e1, e2, on="Date", how="outer").sort_values("Date")
 for col in ["BSPNSHUFAD","BSPNSHUA","BSPNSHUL"]:
     if col not in merged.columns:
@@ -237,82 +234,99 @@ merged["Savings_%_Assets"] = (merged["BSPNSHUFAD"] / merged["BSPNSHUA"]) * 100
 merged["Savings_%_Liabilities"] = (merged["BSPNSHUFAD"] / merged["BSPNSHUL"]) * 100
 merged = clamp_period(merged)
 
-finance_map = {
-    "Savings_%_Assets": "Household savings as % of assets",
-    "Savings_%_Liabilities": "Household savings as % of liabilities",
-    "BHFDDIH": "Housing debt to income",
-    "BHFDA": "Household debt to assets",
-    "LPHTSPRI": "Loan repayments to income",
-    "FLRHOOTA": "Lending rates (all rates)",
-    "FLRHOOVA": "Lending rates (variable rates)",
-    "FLRHOLA": "Lending rates (LVR ≤81%)",
-    "FLRHOLB": "Lending rates (LVR >81%)",
-    "FLRHOVA": "Lending rates (≤600k)",
-    "FLRHOVB": "Lending rates (600–1m)",
-    "FLRHOVC": "Lending rates (1m+)",
-    "DGFACOHM": "12-month housing credit growth",
-    "DGFACBNF12": "12-month business credit growth",
-}
-
 finance_stats = []
 
-# --- Savings ---
+# Savings
 st.subheader("Savings")
-for code in ["Savings_%_Assets","Savings_%_Liabilities"]:
-    if code in merged.columns:
-        cols = st.columns(2)
-        with cols[0]:
-            st.pyplot(line_fig(merged, code, finance_map[code]))
-        with cols[1]:
-            change = calc_mom_yoy(merged, code, finance_map[code])
-            st.markdown(change)
-            finance_stats.append(change)
+cols = st.columns(2)
+if merged["Savings_%_Assets"].notna().any():
+    cols[0].pyplot(line_fig(merged, "Savings_%_Assets", "Household savings as % of assets", "Percent"))
+    finance_stats.append(calc_mom_yoy(merged, "Savings_%_Assets", "Household savings as % of assets"))
+if merged["Savings_%_Liabilities"].notna().any():
+    cols[1].pyplot(line_fig(merged, "Savings_%_Liabilities", "Household savings as % of liabilities", "Percent"))
+    finance_stats.append(calc_mom_yoy(merged, "Savings_%_Liabilities", "Household savings as % of liabilities"))
 
-# --- Debt ---
+# Debt
 st.subheader("Debt")
-for code in ["BHFDDIH","BHFDA","LPHTSPRI"]:
-    df = e2 if code in e2.columns else e13
-    if code in df.columns:
-        cols = st.columns(2)
-        with cols[0]:
-            st.pyplot(line_fig(df, code, finance_map[code]))
-        with cols[1]:
-            change = calc_mom_yoy(df, code, finance_map[code])
-            st.markdown(change)
-            finance_stats.append(change)
+codes = [("BHFDDIH","Housing debt to income"),("BHFDA","Household debt to assets"),("LPHTSPRI","Loan repayments to income")]
+for i in range(0, len(codes), 2):
+    cols = st.columns(2)
+    for j, (code, label) in enumerate(codes[i:i+2]):
+        df = e2 if code in e2.columns else e13
+        if code in df.columns:
+            cols[j].pyplot(line_fig(df, code, label))
+            finance_stats.append(calc_mom_yoy(df, code, label))
 
-# --- Lending Rates ---
+# Lending Rates
 st.subheader("Lending Rates")
-for code in ["FLRHOOTA","FLRHOOVA","FLRHOLA","FLRHOLB","FLRHOVA","FLRHOVB","FLRHOVC"]:
-    if code in f6.columns:
-        cols = st.columns(2)
-        with cols[0]:
-            st.pyplot(line_fig(f6, code, finance_map[code]))
-        with cols[1]:
-            change = calc_mom_yoy(f6, code, finance_map[code])
-            st.markdown(change)
-            finance_stats.append(change)
+lending_codes = [
+    ("FLRHOOTA","Lending rates (all rates)"),
+    ("FLRHOOVA","Lending rates (variable rates)"),
+    ("FLRHOLA","Lending rates (LVR ≤81%)"),
+    ("FLRHOLB","Lending rates (LVR >81%)"),
+    ("FLRHOVA","Lending rates (≤600k)"),
+    ("FLRHOVB","Lending rates (600–1m)"),
+    ("FLRHOVC","Lending rates (1m+)"),
+]
+for i in range(0, len(lending_codes), 2):
+    cols = st.columns(2)
+    for j, (code,label) in enumerate(lending_codes[i:i+2]):
+        if code in f6.columns:
+            cols[j].pyplot(line_fig(f6, code, label))
+            finance_stats.append(calc_mom_yoy(f6, code, label))
 
-# --- Credit Growth ---
+# Credit Growth
 st.subheader("Credit Growth")
-for code in ["DGFACOHM","DGFACBNF12"]:
-    if code in d1.columns:
-        cols = st.columns(2)
-        with cols[0]:
-            st.pyplot(line_fig(d1, code, finance_map[code]))
-        with cols[1]:
-            change = calc_mom_yoy(d1, code, finance_map[code])
-            st.markdown(change)
-            finance_stats.append(change)
+cols = st.columns(2)
+if "DGFACOHM" in d1.columns:
+    cols[0].pyplot(line_fig(d1, "DGFACOHM", "12-month housing credit growth", "Percent"))
+    finance_stats.append(calc_mom_yoy(d1, "DGFACOHM", "12-month housing credit growth"))
+if "DGFACBNF12" in d1.columns:
+    cols[1].pyplot(line_fig(d1, "DGFACBNF12", "12-month business credit growth", "Percent"))
+    finance_stats.append(calc_mom_yoy(d1, "DGFACBNF12", "12-month business credit growth"))
 
-st.markdown("**Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
 
-# --- Section: YoY % change in equities ---
+# =========================================================
+# 6) Markets (Yahoo Finance)
+# =========================================================
+st.header("Markets Dashboard (Yahoo Finance)")
+
+def plot_yf(ticker, title, period="5y", freq="1mo"):
+    data = yf.download(ticker, period=period, interval=freq)["Close"].dropna()
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.plot(data.index, data, label=title)
+    ax.set_title(title)
+    ax.set_ylabel("Index / FX")
+    ax.set_xlabel("Date")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+    if len(data) > 13 and not np.isnan(data.iloc[-1]):
+        latest, prev, yoy = data.iloc[-1], data.iloc[-2], data.iloc[-13]
+        return f"{title} ({data.index[-1].strftime('%b %Y')}) — MoM: {latest-prev:+.2f}, YoY: {latest-yoy:+.2f}"
+    return f"{title}: insufficient data"
+
+# FX
+st.subheader("Exchange Rates")
+fx_stats = []
+col1, col2 = st.columns(2)
+with col1: fx_stats.append(plot_yf("AUDUSD=X", "AUD/USD (FX rate)"))
+with col2: fx_stats.append(plot_yf("AUDGBP=X", "AUD/GBP (FX rate)"))
+st.markdown("**AI Summary (FX):** " + explain_with_gpt("\n".join(fx_stats), "Exchange Rates"))
+
+# Equities
+st.subheader("Equity Indices")
+eq_stats = []
+col1, col2 = st.columns(2)
+with col1: eq_stats.append(plot_yf("^AXJO", "ASX200 Index"))
+with col2: eq_stats.append(plot_yf("^GSPC", "S&P500 Index"))
+st.markdown("**AI Summary (Equities):** " + explain_with_gpt("\n".join(eq_stats), "Equity Indices"))
+
+# YoY Change side by side
 st.subheader("YoY Change in Equity Indices")
 yoy_stats = []
-
 col1, col2 = st.columns(2)
-
 with col1:
     data = yf.download("^AXJO", period="5y", interval="1mo")["Close"].dropna()
     yoy = data.pct_change(periods=12) * 100
@@ -324,9 +338,8 @@ with col1:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-    if len(yoy) > 0:
+    if len(yoy) > 0 and not np.isnan(yoy.iloc[-1]):
         yoy_stats.append(f"ASX200 latest YoY change: {yoy.iloc[-1]:+.2f}%")
-
 with col2:
     data = yf.download("^GSPC", period="5y", interval="1mo")["Close"].dropna()
     yoy = data.pct_change(periods=12) * 100
@@ -338,10 +351,9 @@ with col2:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-    if len(yoy) > 0:
+    if len(yoy) > 0 and not np.isnan(yoy.iloc[-1]):
         yoy_stats.append(f"S&P500 latest YoY change: {yoy.iloc[-1]:+.2f}%")
 
 st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
 
-
-st.caption("Data source: Reserve Bank of Australia Statistical Tables. Figures computed from public XLSX files at run-time.")
+st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
