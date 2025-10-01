@@ -120,7 +120,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             activity_stats.append(change)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels"))
+st.markdown("**Summary:** " + explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels"))
 
 # =========================================================
 # 2) Key macro metrics (H1, G1, F1)
@@ -150,7 +150,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             macro_stats.append(change)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics"))
+st.markdown("**Summary:** " + explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics"))
 
 # =========================================================
 # 3) Inflation detail (G2)
@@ -183,7 +183,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             inflation_stats.append(change)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
+st.markdown("**Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
 
 # =========================================================
 # 4) Labour market (H5, H4)
@@ -211,7 +211,7 @@ for i in range(0, len(codes), 2):
             st.markdown(change)
             labour_stats.append(change)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(labour_stats), "Labour Market"))
+st.markdown("**Summary:** " + explain_with_gpt("\n".join(labour_stats), "Labour Market"))
 
 # =========================================================
 # 5) Household finance
@@ -301,6 +301,6 @@ for code in ["DGFACOHM","DGFACBNF12"]:
             st.markdown(change)
             finance_stats.append(change)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
+st.markdown("**Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
 
 st.caption("Data source: Reserve Bank of Australia Statistical Tables. Figures computed from public XLSX files at run-time.")
