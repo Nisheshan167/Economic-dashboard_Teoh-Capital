@@ -3,11 +3,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 from io import BytesIO
-import openai
+from openai import OpenAI
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
-# ---------- GPT Helper ----------
+# ---------- OpenAI client ----------
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 def explain_with_gpt(indicator_stats, umbrella_name):
     if not indicator_stats:
         return "No data available to summarize."
@@ -18,11 +20,12 @@ def explain_with_gpt(indicator_stats, umbrella_name):
     {indicator_stats}
     """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
         )
-        return response["choices"][0]["message"]["content"]
+        return response.choices[0].message.content
     except Exception as e:
         return f"(AI summary unavailable: {e})"
 
@@ -253,42 +256,50 @@ finance_stats = []
 st.subheader("Savings")
 for code in ["Savings_%_Assets","Savings_%_Liabilities"]:
     if code in merged.columns:
-        col1, col2 = st.columns(2)
-        col1.pyplot(line_fig(merged, code, finance_map[code]))
-        change = calc_mom_yoy(merged, code, finance_map[code])
-        col2.markdown(change)
-        finance_stats.append(change)
+        cols = st.columns(2)
+        with cols[0]:
+            st.pyplot(line_fig(merged, code, finance_map[code]))
+        with cols[1]:
+            change = calc_mom_yoy(merged, code, finance_map[code])
+            st.markdown(change)
+            finance_stats.append(change)
 
 # --- Debt ---
 st.subheader("Debt")
 for code in ["BHFDDIH","BHFDA","LPHTSPRI"]:
     df = e2 if code in e2.columns else e13
     if code in df.columns:
-        col1, col2 = st.columns(2)
-        col1.pyplot(line_fig(df, code, finance_map[code]))
-        change = calc_mom_yoy(df, code, finance_map[code])
-        col2.markdown(change)
-        finance_stats.append(change)
+        cols = st.columns(2)
+        with cols[0]:
+            st.pyplot(line_fig(df, code, finance_map[code]))
+        with cols[1]:
+            change = calc_mom_yoy(df, code, finance_map[code])
+            st.markdown(change)
+            finance_stats.append(change)
 
 # --- Lending Rates ---
 st.subheader("Lending Rates")
 for code in ["FLRHOOTA","FLRHOOVA","FLRHOLA","FLRHOLB","FLRHOVA","FLRHOVB","FLRHOVC"]:
     if code in f6.columns:
-        col1, col2 = st.columns(2)
-        col1.pyplot(line_fig(f6, code, finance_map[code]))
-        change = calc_mom_yoy(f6, code, finance_map[code])
-        col2.markdown(change)
-        finance_stats.append(change)
+        cols = st.columns(2)
+        with cols[0]:
+            st.pyplot(line_fig(f6, code, finance_map[code]))
+        with cols[1]:
+            change = calc_mom_yoy(f6, code, finance_map[code])
+            st.markdown(change)
+            finance_stats.append(change)
 
 # --- Credit Growth ---
 st.subheader("Credit Growth")
 for code in ["DGFACOHM","DGFACBNF12"]:
     if code in d1.columns:
-        col1, col2 = st.columns(2)
-        col1.pyplot(line_fig(d1, code, finance_map[code]))
-        change = calc_mom_yoy(d1, code, finance_map[code])
-        col2.markdown(change)
-        finance_stats.append(change)
+        cols = st.columns(2)
+        with cols[0]:
+            st.pyplot(line_fig(d1, code, finance_map[code]))
+        with cols[1]:
+            change = calc_mom_yoy(d1, code, finance_map[code])
+            st.markdown(change)
+            finance_stats.append(change)
 
 st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
 
