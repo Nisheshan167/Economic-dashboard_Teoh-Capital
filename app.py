@@ -302,10 +302,14 @@ def plot_yf(ticker, title, period="5y", freq="1mo"):
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-    if len(data) > 13 and not np.isnan(data.iloc[-1]):
-        latest, prev, yoy = data.iloc[-1], data.iloc[-2], data.iloc[-13]
-        return f"{title} ({data.index[-1].strftime('%b %Y')}) — MoM: {latest-prev:+.2f}, YoY: {latest-yoy:+.2f}"
+
+    # Ensure we only work with scalar floats
+    if len(data) > 13:
+        latest, prev, yoy = float(data.iloc[-1]), float(data.iloc[-2]), float(data.iloc[-13])
+        if not np.isnan(latest):
+            return f"{title} ({data.index[-1].strftime('%b %Y')}) — MoM: {latest-prev:+.2f}, YoY: {latest-yoy:+.2f}"
     return f"{title}: insufficient data"
+
 
 # FX
 st.subheader("Exchange Rates")
