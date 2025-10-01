@@ -351,6 +351,6 @@ for ticker, name in [("^AXJO","ASX200"),("^GSPC","S&P500")]:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-
+st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
 
 st.caption("Data source: Reserve Bank of Australia Statistical Tables. Figures computed from public XLSX files at run-time.")
