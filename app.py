@@ -3,10 +3,30 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 from io import BytesIO
+import openai
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
-# ---------- Helpers ----------
+# ---------- GPT Helper ----------
+def explain_with_gpt(indicator_stats, umbrella_name):
+    if not indicator_stats:
+        return "No data available to summarize."
+    prompt = f"""
+    You are an economic analyst. Based on the following indicators for {umbrella_name}, 
+    write a concise analytical summary (2–3 sentences) focusing on key trends:
+
+    {indicator_stats}
+    """
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"(AI summary unavailable: {e})"
+
+# ---------- RBA Links ----------
 RBA_URLS = {
     "H3": "https://www.rba.gov.au/statistics/tables/xls/h03hist.xlsx",
     "H1": "https://www.rba.gov.au/statistics/tables/xls/h01hist.xlsx",
@@ -33,8 +53,9 @@ def load_rba_table(code: str) -> pd.DataFrame:
     df = df.dropna(subset=["Date"])
     return df
 
+# ---------- Chart Helpers ----------
 def line_fig(df: pd.DataFrame, ycol: str, title: str, ylabel: str = "Percent / Index"):
-    fig, ax = plt.subplots(figsize=(8,4))
+    fig, ax = plt.subplots(figsize=(7,4))
     ax.plot(df["Date"], df[ycol])
     ax.set_title(title)
     ax.set_xlabel("Date")
@@ -58,7 +79,7 @@ def calc_mom_yoy(df: pd.DataFrame, col: str, label: str) -> str:
 def pick_first_existing(df: pd.DataFrame, candidates: list[str]) -> str | None:
     return next((c for c in candidates if c in df.columns), None)
 
-# ---------- Sidebar filters ----------
+# ---------- Sidebar ----------
 st.sidebar.header("Filters")
 default_start = pd.to_datetime("2015-01-01")
 default_end = pd.to_datetime("today")
@@ -85,13 +106,18 @@ activity_map = {
     "GICNBC":    "Business conditions",
 }
 
+activity_stats = []
 codes = [c for c in activity_map if c in h3.columns]
 for i in range(0, len(codes), 2):
     cols = st.columns(2)
     for j, code in enumerate(codes[i:i+2]):
         with cols[j]:
             st.pyplot(line_fig(h3, code, activity_map[code]))
-            st.markdown(calc_mom_yoy(h3, code, activity_map[code]))
+            change = calc_mom_yoy(h3, code, activity_map[code])
+            st.markdown(change)
+            activity_stats.append(change)
+
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels"))
 
 # =========================================================
 # 2) Key macro metrics (H1, G1, F1)
@@ -108,16 +134,20 @@ macro_map = {
     "GCPIAGYP":   "Year-ended inflation (CPI)",
     cash_col:     "Cash Rate Target" if cash_col else None,
 }
-codes = [c for c in macro_map if c and c in (h1.columns.tolist() + g1.columns.tolist() + f1.columns.tolist())]
 
-dfs = {**h1, **g1, **f1}  # merge dict of frames for lookup
+macro_stats = []
+codes = [c for c in macro_map if c]
 for i in range(0, len(codes), 2):
     cols = st.columns(2)
     for j, code in enumerate(codes[i:i+2]):
         df = h1 if code in h1.columns else g1 if code in g1.columns else f1
         with cols[j]:
             st.pyplot(line_fig(df, code, macro_map[code]))
-            st.markdown(calc_mom_yoy(df, code, macro_map[code]))
+            change = calc_mom_yoy(df, code, macro_map[code])
+            st.markdown(change)
+            macro_stats.append(change)
+
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics"))
 
 # =========================================================
 # 3) Inflation detail (G2)
@@ -139,13 +169,18 @@ g2_map = {
     "GCPIFISYP":"Insurance & financial services",
 }
 
+inflation_stats = []
 codes = [c for c in g2_map if c in g2.columns]
 for i in range(0, len(codes), 2):
     cols = st.columns(2)
     for j, code in enumerate(codes[i:i+2]):
         with cols[j]:
             st.pyplot(line_fig(g2, code, g2_map[code]))
-            st.markdown(calc_mom_yoy(g2, code, g2_map[code]))
+            change = calc_mom_yoy(g2, code, g2_map[code])
+            st.markdown(change)
+            inflation_stats.append(change)
+
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
 
 # =========================================================
 # 4) Labour market (H5, H4)
@@ -161,6 +196,7 @@ labour_map = {
     "GLFSEPTSYP":"Year-ended employment growth",
 }
 
+labour_stats = []
 codes = [c for c in labour_map if c in (h5.columns.tolist() + h4.columns.tolist())]
 for i in range(0, len(codes), 2):
     cols = st.columns(2)
@@ -168,10 +204,14 @@ for i in range(0, len(codes), 2):
         df = h5 if code in h5.columns else h4
         with cols[j]:
             st.pyplot(line_fig(df, code, labour_map[code]))
-            st.markdown(calc_mom_yoy(df, code, labour_map[code]))
+            change = calc_mom_yoy(df, code, labour_map[code])
+            st.markdown(change)
+            labour_stats.append(change)
+
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(labour_stats), "Labour Market"))
 
 # =========================================================
-# 5) Household finance (E1, E2, E13, F6, D1)
+# 5) Household finance
 # =========================================================
 st.header("Household finance")
 
@@ -181,6 +221,7 @@ e13 = clamp_period(load_rba_table("E13"))
 f6 = clamp_period(load_rba_table("F6"))
 d1 = clamp_period(load_rba_table("D1"))
 
+# Derived ratios
 merged = pd.merge(e1, e2, on="Date", how="outer").sort_values("Date")
 for col in ["BSPNSHUFAD","BSPNSHUA","BSPNSHUL"]:
     if col not in merged.columns:
@@ -206,16 +247,49 @@ finance_map = {
     "DGFACBNF12": "12-month business credit growth",
 }
 
-# Plot household finance in pairs
-dfs = {"Savings_%_Assets": merged, "Savings_%_Liabilities": merged,
-       "BHFDDIH": e2, "BHFDA": e2, "LPHTSPRI": e13,
-       "DGFACOHM": d1, "DGFACBNF12": d1}
-for code in ["Savings_%_Assets","Savings_%_Liabilities","BHFDDIH","BHFDA","LPHTSPRI",
-             "FLRHOOTA","FLRHOOVA","FLRHOLA","FLRHOLB","FLRHOVA","FLRHOVB","FLRHOVC",
-             "DGFACOHM","DGFACBNF12"]:
-    df = dfs.get(code, f6 if code in f6.columns else None)
-    if df is not None and code in df.columns:
-        st.pyplot(line_fig(df, code, finance_map[code]))
-        st.markdown(calc_mom_yoy(df, code, finance_map[code]))
+finance_stats = []
+
+# --- Savings ---
+st.subheader("Savings")
+for code in ["Savings_%_Assets","Savings_%_Liabilities"]:
+    if code in merged.columns:
+        col1, col2 = st.columns(2)
+        col1.pyplot(line_fig(merged, code, finance_map[code]))
+        change = calc_mom_yoy(merged, code, finance_map[code])
+        col2.markdown(change)
+        finance_stats.append(change)
+
+# --- Debt ---
+st.subheader("Debt")
+for code in ["BHFDDIH","BHFDA","LPHTSPRI"]:
+    df = e2 if code in e2.columns else e13
+    if code in df.columns:
+        col1, col2 = st.columns(2)
+        col1.pyplot(line_fig(df, code, finance_map[code]))
+        change = calc_mom_yoy(df, code, finance_map[code])
+        col2.markdown(change)
+        finance_stats.append(change)
+
+# --- Lending Rates ---
+st.subheader("Lending Rates")
+for code in ["FLRHOOTA","FLRHOOVA","FLRHOLA","FLRHOLB","FLRHOVA","FLRHOVB","FLRHOVC"]:
+    if code in f6.columns:
+        col1, col2 = st.columns(2)
+        col1.pyplot(line_fig(f6, code, finance_map[code]))
+        change = calc_mom_yoy(f6, code, finance_map[code])
+        col2.markdown(change)
+        finance_stats.append(change)
+
+# --- Credit Growth ---
+st.subheader("Credit Growth")
+for code in ["DGFACOHM","DGFACBNF12"]:
+    if code in d1.columns:
+        col1, col2 = st.columns(2)
+        col1.pyplot(line_fig(d1, code, finance_map[code]))
+        change = calc_mom_yoy(d1, code, finance_map[code])
+        col2.markdown(change)
+        finance_stats.append(change)
+
+st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
 
 st.caption("Data source: Reserve Bank of Australia Statistical Tables. Figures computed from public XLSX files at run-time.")
