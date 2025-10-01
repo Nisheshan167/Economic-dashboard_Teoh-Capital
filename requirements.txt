@@ -4,3 +4,4 @@ matplotlib
 pandas-datareader
 openpyxl
 requests
+openai
