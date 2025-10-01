@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import requests
 from io import BytesIO
 from openai import OpenAI
+import yfinance as yf
+import matplotlib.pyplot as plt
+import streamlit as st
+import pandas as pd
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
@@ -302,5 +306,51 @@ for code in ["DGFACOHM","DGFACBNF12"]:
             finance_stats.append(change)
 
 st.markdown("**Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
+st.header("Markets Dashboard (Yahoo Finance)")
+
+# ----------- Helper -----------
+def plot_yf(ticker, title, period="5y", freq="1mo"):
+    data = yf.download(ticker, period=period, interval=freq)
+    data = data.dropna()
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.plot(data.index, data["Close"], label=title)
+    ax.set_title(title)
+    ax.set_ylabel("Index / FX")
+    ax.set_xlabel("Date")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
+# ----------- FX ----------- 
+st.subheader("Exchange Rates")
+col1, col2 = st.columns(2)
+with col1:
+    plot_yf("AUDUSD=X", "AUD/USD (FX rate)")
+with col2:
+    plot_yf("AUDGBP=X", "AUD/GBP (FX rate)")
+
+# ----------- Equities ----------- 
+st.subheader("Equity Indices")
+col1, col2 = st.columns(2)
+with col1:
+    plot_yf("^AXJO", "ASX200 Index")
+with col2:
+    plot_yf("^GSPC", "S&P500 Index")
+
+# ----------- YoY % Change ----------- 
+st.subheader("YoY Change in Equity Indices")
+
+for ticker, name in [("^AXJO","ASX200"),("^GSPC","S&P500")]:
+    data = yf.download(ticker, period="5y", interval="1mo")["Close"].dropna()
+    yoy = data.pct_change(periods=12) * 100
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.plot(yoy.index, yoy, label=f"{name} YoY Change (%)")
+    ax.set_title(f"{name} YoY Change")
+    ax.axhline(0, color="gray", linestyle="--")
+    ax.set_ylabel("%")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
 
 st.caption("Data source: Reserve Bank of Australia Statistical Tables. Figures computed from public XLSX files at run-time.")
