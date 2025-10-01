@@ -174,16 +174,30 @@ g2_map = {
     "GCPIFISYP":"Insurance & financial services",
 }
 
+valid_cols = [c for c in g2_map if c in g2.columns]
+g2_nonan = g2.dropna(subset=valid_cols)
+
 inflation_stats = []
-codes = [c for c in g2_map if c in g2.columns]
-for i in range(0, len(codes), 2):
-    cols = st.columns(2)
-    for j, code in enumerate(codes[i:i+2]):
-        with cols[j]:
-            st.pyplot(line_fig(g2, code, g2_map[code]))
-            change = calc_mom_yoy(g2, code, g2_map[code])
-            st.markdown(change)
-            inflation_stats.append(change)
+if not g2_nonan.empty:
+    latest = g2_nonan.iloc[-1]
+    date_str = latest["Date"].strftime("%b %Y")
+    values = [float(latest[c]) for c in valid_cols]
+    labels = [g2_map[c] for c in valid_cols]
+
+    # --- One bar chart for all components ---
+    fig, ax = plt.subplots(figsize=(10,6))
+    ax.bar(labels, values)
+    ax.set_title(f"CPI Components (YoY %) — {date_str}")
+    ax.set_ylabel("Percent")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.grid(axis="y", linestyle="--", alpha=0.6)
+    fig.tight_layout()
+    st.pyplot(fig)
+
+    # Build stats for AI summary
+    for c in valid_cols:
+        inflation_stats.append(calc_mom_yoy(g2, c, g2_map[c]))
 
 st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
 
