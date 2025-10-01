@@ -331,6 +331,7 @@ st.markdown("**AI Summary (Equities):** " + explain_with_gpt("\n".join(eq_stats)
 st.subheader("YoY Change in Equity Indices")
 yoy_stats = []
 col1, col2 = st.columns(2)
+
 with col1:
     data = yf.download("^AXJO", period="5y", interval="1mo")["Close"].dropna()
     yoy = data.pct_change(periods=12) * 100
@@ -342,8 +343,12 @@ with col1:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-    if len(yoy) > 0 and not np.isnan(yoy.iloc[-1]):
-        yoy_stats.append(f"ASX200 latest YoY change: {yoy.iloc[-1]:+.2f}%")
+
+    if len(yoy) > 0:
+        latest_val = float(yoy.iloc[-1])  # force to scalar
+        if not np.isnan(latest_val):
+            yoy_stats.append(f"ASX200 latest YoY change: {latest_val:+.2f}%")
+
 with col2:
     data = yf.download("^GSPC", period="5y", interval="1mo")["Close"].dropna()
     yoy = data.pct_change(periods=12) * 100
@@ -355,8 +360,14 @@ with col2:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-    if len(yoy) > 0 and not np.isnan(yoy.iloc[-1]):
-        yoy_stats.append(f"S&P500 latest YoY change: {yoy.iloc[-1]:+.2f}%")
+
+    if len(yoy) > 0:
+        latest_val = float(yoy.iloc[-1])  # force to scalar
+        if not np.isnan(latest_val):
+            yoy_stats.append(f"S&P500 latest YoY change: {latest_val:+.2f}%")
+
+st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
+
 
 st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
 
