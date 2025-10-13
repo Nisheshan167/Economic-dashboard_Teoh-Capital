@@ -609,36 +609,3 @@ try:
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
 
-# =========================================================
-# 🧱 Sector Allocation (VAS.AX)
-# =========================================================
-st.subheader("VAS Sector Allocation (Vanguard Australia Shares Index ETF)")
-
-try:
-    url = "https://www.vanguard.com.au/adviser/api/funds/VAS/portfolio-composition"
-    response = requests.get(url, timeout=15)
-    data = response.json()
-
-    # Extract top-level allocations
-    sectors = pd.DataFrame(data["sectorAllocations"])
-    sectors = sectors.rename(columns={"sectorName": "Sector", "weight": "Weight"})
-    sectors["Weight"] = sectors["Weight"].astype(float) * 100
-
-    # Bar chart
-    fig, ax = plt.subplots(figsize=(8,5))
-    sectors.sort_values("Weight", inplace=True)
-    ax.barh(sectors["Sector"], sectors["Weight"], color="tab:green")
-    ax.set_xlabel("Weight (%)")
-    ax.set_title("VAS Sector Allocation")
-    for i, v in enumerate(sectors["Weight"]):
-        ax.text(v + 0.3, i, f"{v:.1f}%", va="center")
-    st.pyplot(fig)
-
-    # Table + AI summary
-    st.dataframe(sectors.style.format({"Weight": "{:.2f}%"}))
-    lines = [f"{row.Sector}: {row.Weight:.2f}%" for _, row in sectors.iterrows()]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "VAS Sector Allocation"))
-
-except Exception as e:
-    st.warning(f"Unable to load sector allocation data: {e}")
-
