@@ -447,47 +447,42 @@ except Exception as e:
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
 
 # =========================================================
-# 🌍 Global Central Bank Policy Rates (Official Sources)
+# 🌍 Global Central Bank Policy Rates (via FRED)
 # =========================================================
 st.header("🌍 Global Central Bank Policy Rates")
 
-def load_public_rate(name, url, date_col, value_col):
+def load_fred_series(code, label):
     try:
+        url = f"https://fred.stlouisfed.org/data/{code}.csv"
         df = pd.read_csv(url)
-        # Handle FRED and BoC structure
-        if "DATE" in df.columns:
-            df.rename(columns={"DATE": "Date", df.columns[-1]: "Rate"}, inplace=True)
-        elif date_col in df.columns and value_col in df.columns:
-            df = df.rename(columns={date_col: "Date", value_col: "Rate"})
-        else:
-            df.columns = ["Date", "Rate"]
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df = df.dropna(subset=["Date", "Rate"])
+        df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
+        df.rename(columns={"DATE": "Date", df.columns[1]: "Rate"}, inplace=True)
         df["Rate"] = pd.to_numeric(df["Rate"], errors="coerce")
-        return df[["Date", "Rate"]].dropna()
+        df = df.dropna(subset=["Rate"])
+        return df[["Date", "Rate"]]
     except Exception as e:
-        st.warning(f"Could not load {name}: {e}")
+        st.warning(f"Could not load {label}: {e}")
         return pd.DataFrame(columns=["Date", "Rate"])
 
 sources = {
-    "Australia (RBA)": "https://www.rba.gov.au/statistics/tables/xls/f01hist.xlsx",
-    "United States (Fed Funds Rate)": "https://fred.stlouisfed.org/data/FEDFUNDS.csv",
-    "Euro Area (ECB Main Refinancing Rate)": "https://sdw.ecb.europa.eu/quickviewexport.do?SERIES_KEY=FM.M.U2.EUR.4F.KR.MRR.FR.LEV&trans=N",
-    "Japan (BOJ Policy Rate)": "https://www.stat-search.boj.or.jp/json?code=BOJSTATSTY.D.PM.JAPAN.POLICYRATE",
-    "United Kingdom (BOE Bank Rate)": "https://www.bankofengland.co.uk/boeapps/database/Bank-Rate.asp?csv.x=yes",
-    "Canada (BoC Overnight Target)": "https://www.bankofcanada.ca/valet/observations/AVGINTTARG?format=csv"
+    "United States (Fed Funds Rate)": "FEDFUNDS",
+    "Euro Area (ECB Main Refinancing Rate)": "ECBMAIN",
+    "Japan (3M Interbank Rate)": "IR3TIB01JPM156N",
+    "United Kingdom (3M Interbank Rate)": "IR3TIB01GBM156N",
+    "Canada (3M Interbank Rate)": "IR3TIB01CAM156N"
 }
 
 results = {}
-for name, url in sources.items():
-    if "rba.gov" in url:
-        # reuse your cached RBA table for consistency
-        df = load_rba_table("F1")
-        col = pick_first_existing(df, ["FIRMMCRTD", "FIRMMCRT", "FIRMMCR", "FIRMMCRTDV"])
-        if col:
-            results[name] = df[["Date", col]].rename(columns={col: "Rate"}).dropna()
-    else:
-        results[name] = load_public_rate(name, url, "Date", "Rate")
+
+# Australia via RBA
+rba = load_rba_table("F1")
+col = pick_first_existing(rba, ["FIRMMCRTD", "FIRMMCRT", "FIRMMCR", "FIRMMCRTDV"])
+if col:
+    results["Australia (RBA Cash Rate)"] = rba[["Date", col]].rename(columns={col: "Rate"}).dropna()
+
+# Others via FRED
+for label, code in sources.items():
+    results[label] = load_fred_series(code, label)
 
 if results:
     cols = st.columns(2)
@@ -496,7 +491,7 @@ if results:
         if df.empty:
             continue
         with cols[i % 2]:
-            fig, ax = plt.subplots(figsize=(7,4))
+            fig, ax = plt.subplots(figsize=(7, 4))
             ax.plot(df["Date"], df["Rate"], label=name)
             ax.set_title(name)
             ax.set_ylabel("Interest Rate (%)")
@@ -504,7 +499,8 @@ if results:
             ax.legend()
             st.pyplot(fig)
         if len(df) > 1:
-            rate_summary.append(f"{name}: latest {df['Rate'].iloc[-1]:.2f}%")
+            rate_summary.append(f"{name}: {df['Rate'].iloc[-1]:.2f}%")
     st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(rate_summary), "Global Interest Rates"))
 else:
     st.warning("No interest rate data loaded.")
+
