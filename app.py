@@ -7,6 +7,75 @@ from openai import OpenAI
 import yfinance as yf
 import numpy as np
 
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+def housing_market_section():
+    st.header("🏠 CoreLogic Daily Home Value Index")
+
+    # Load Excel file
+    try:
+        df = pd.read_excel("data/corelogic_daily_index.xlsx", sheet_name=0)
+    except Exception as e:
+        st.error(f"Error loading Excel file: {e}")
+        return
+
+    # Convert Date column to datetime
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'])
+    else:
+        st.error("❌ 'Date' column not found in Excel file.")
+        return
+
+    # List of available columns for selection
+    cities = [
+        'Sydney (SYDD)',
+        'Melbourne (MELD)',
+        'Brisbane (inc Gold Coast) (BRID)',
+        'Adelaide (ADED)',
+        'Perth (PERD)',
+        '5 capital city aggregate (AUSD)'
+    ]
+
+    available_cities = [c for c in cities if c in df.columns]
+
+    selected_cities = st.multiselect(
+        "Select cities",
+        available_cities,
+        default=['5 capital city aggregate (AUSD)'] if '5 capital city aggregate (AUSD)' in available_cities else available_cities[:1]
+    )
+
+    if not selected_cities:
+        st.warning("Please select at least one city to view data.")
+        return
+
+    # Plot interactive line chart
+    fig = px.line(
+        df,
+        x='Date',
+        y=selected_cities,
+        labels={'value': 'Home Value Index', 'variable': 'City'},
+        title="Daily Home Value Index Trends"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Summary table
+    st.subheader("📊 Summary Statistics (Last 12 Months)")
+    summary = df[selected_cities].describe().T[['mean', 'min', 'max']]
+    summary['% Change'] = (
+        (df[selected_cities].iloc[-1].values / df[selected_cities].iloc[0].values - 1) * 100
+    )
+
+    st.dataframe(
+        summary.style.format({
+            'mean': '{:.2f}',
+            'min': '{:.2f}',
+            'max': '{:.2f}',
+            '% Change': '{:.2f}%'
+        })
+    )
+
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
 # ---------- OpenAI client ----------
@@ -384,5 +453,16 @@ st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_st
 
 
 st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
+
+# Existing imports...
+import streamlit as st
+from housing_market import housing_market_section  # if you put this in a separate module
+
+st.sidebar.title("Economic Dashboard")
+tab1, tab2, tab3 = st.tabs(["Macro", "Markets", "Housing Market"])
+
+with tab3:
+    housing_market_section()
+
 
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
