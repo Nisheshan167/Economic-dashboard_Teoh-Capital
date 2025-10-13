@@ -488,71 +488,46 @@ try:
         st.pyplot(fig)
 
 
-        st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(ai_lines), "Australian State Populations"))
-
 except Exception as e:
     st.warning(f"Unable to load population data: {e}")
 
 
 # =========================================================
-# 🌍 Global Population and Migration (World Bank API)
+# 🌐 Global Total Population
 # =========================================================
-st.header("🌍 Global Population & Migration Trends")
-
-from pandas_datareader import wb
+st.header("🌐 Global Total Population Over Time")
 
 try:
-    # Indicators
-    indicators = {
-        "SP.POP.TOTL": "Population (Total)",
-        "SM.POP.NETM": "Net Migration"
-    }
+    url = "https://api.worldbank.org/v2/country/all/indicator/SP.POP.TOTL?format=json&per_page=20000"
+    resp = requests.get(url, timeout=15)
+    resp.raise_for_status()
+    json_data = resp.json()
+    # The data is in the second element of the JSON (index 1)
+    records = json_data[1]
+    # Normalize records into a DataFrame
+    df = pd.json_normalize(records)
+    # Keep only “date” and “value”
+    df = df[["date", "value"]].dropna()
+    df["date"] = pd.to_numeric(df["date"], errors="coerce")
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df = df.sort_values("date")
 
-    countries = ["AU", "US", "GB", "CA", "JP", "EUU", "CN", "IN"]
-
-    # --- Fetch data from World Bank ---
-    df_pop = wb.data.DataFrame(indicators=list(indicators.keys()), countries=countries, range=(2000, 2023))
-    df_pop = df_pop.reset_index().rename(columns={"economy": "Country", "time": "Year"})
-
-    # Rename indicator columns
-    df_pop = df_pop.rename(columns=indicators)
-
-    # --- Population chart ---
-    st.subheader("Global Population Growth (2000–2023)")
+    # Plot
     fig, ax = plt.subplots(figsize=(10,5))
-    for c in countries:
-        subset = df_pop[df_pop["Country"] == c]
-        ax.plot(subset["Year"], subset["Population (Total)"] / 1e6, label=c)
-    ax.set_title("Total Population (Millions)")
-    ax.set_ylabel("Population (Millions)")
-    ax.legend(loc="upper left", ncol=2)
+    ax.plot(df["date"], df["value"] / 1e9, color="tab:blue")  # scale to billions
+    ax.set_title("World Population (total) — Billions")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Population (Billions)")
     ax.grid(True, linestyle="--", alpha=0.6)
     st.pyplot(fig)
 
-    # --- Net migration chart ---
-    st.subheader("Net Migration (2000–2023)")
-    fig, ax = plt.subplots(figsize=(10,5))
-    for c in countries:
-        subset = df_pop[df_pop["Country"] == c]
-        if subset["Net Migration"].notna().any():
-            ax.plot(subset["Year"], subset["Net Migration"] / 1e3, label=c)
-    ax.set_title("Net Migration (Thousands)")
-    ax.legend(loc="upper left", ncol=2)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    st.pyplot(fig)
-
-    # --- AI Summary ---
-    latest_year = df_pop["Year"].max()
-    latest_data = df_pop[df_pop["Year"] == latest_year]
-    lines = [
-        f"{row.Country}: population {row['Population (Total)'] / 1e6:.1f}M, net migration {row['Net Migration'] / 1e3:.0f}K"
-        for _, row in latest_data.iterrows()
-        if not pd.isna(row["Population (Total)"])
-    ]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Population & Migration Trends"))
+    # Latest value text
+    latest = df.iloc[-1]
+    st.markdown(f"**Latest world population (year {int(latest['date'])}): {latest['value'] / 1e9:.3f} billion**")
 
 except Exception as e:
-    st.warning(f"Unable to load World Bank data: {e}")
+    st.warning(f"Unable to load global population data: {e}")
+
 
 
 # =========================================================
