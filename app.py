@@ -447,22 +447,26 @@ except Exception as e:
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
 
 # =========================================================
-# 🌍 Global Central Bank Policy Rates (Manual Table)
+# 🌍 Global Central Bank Policy Rates (from Excel)
 # =========================================================
 st.header("🌍 Global Central Bank Policy Rates")
 
 try:
+    # Load and clean
     df_rates = pd.read_excel("global_interest_rates.xlsx")
-    df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce")
-    df_rates = df_rates.dropna(subset=["Date"])
+    df_rates.columns = [c.strip() for c in df_rates.columns]
+    df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce", format="%b-%Y")
+    df_rates = df_rates.dropna(subset=["Date"]).sort_values("Date")
+
     countries = [c for c in df_rates.columns if c != "Date"]
 
-    # --- Plot ---
-    fig, ax = plt.subplots(figsize=(10,5))
+    # --- Line chart ---
+    fig, ax = plt.subplots(figsize=(10, 5))
     for c in countries:
         ax.plot(df_rates["Date"], df_rates[c], label=c)
-    ax.set_title("Policy Interest Rates by Country")
-    ax.set_ylabel("Rate (%)")
+    ax.set_title("Global Central Bank Policy Rates (Monthly)")
+    ax.set_ylabel("Policy Rate (%)")
+    ax.set_xlabel("Date")
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
@@ -474,47 +478,19 @@ try:
         "Latest Rate (%)": [latest[c] for c in countries]
     })
 
-    # Compute differential vs Australia if available
-    if "Australia (RBA)" in df_rates.columns:
-        au_rate = latest["Australia (RBA)"]
+    # Compare vs Australia
+    if "Australia" in summary["Country"].values:
+        au_rate = float(summary.loc[summary["Country"] == "Australia", "Latest Rate (%)"].values[0])
         summary["Δ vs Australia (bps)"] = ((summary["Latest Rate (%)"] - au_rate) * 100).round(0)
 
-    st.dataframe(summary)
+    st.subheader("Latest Policy Rates")
+    st.dataframe(summary.style.format({"Latest Rate (%)": "{:.2f}", "Δ vs Australia (bps)": "{:+.0f}"}))
 
-    # --- AI summary ---
-    rate_lines = [f"{row.Country}: {row['Latest Rate (%)']:.2f}%" for _, row in summary.iterrows()]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(rate_lines), "Global Central Bank Rates"))
+    # --- AI Summary ---
+    lines = [f"{r['Country']}: {r['Latest Rate (%)']:.2f}%" for _, r in summary.iterrows()]
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Central Bank Policy Rates"))
 
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
 
-# Australia via RBA
-rba = load_rba_table("F1")
-col = pick_first_existing(rba, ["FIRMMCRTD", "FIRMMCRT", "FIRMMCR", "FIRMMCRTDV"])
-if col:
-    results["Australia (RBA Cash Rate)"] = rba[["Date", col]].rename(columns={col: "Rate"}).dropna()
-
-# Others via FRED
-for label, code in sources.items():
-    results[label] = load_fred_series(code, label)
-
-if results:
-    cols = st.columns(2)
-    rate_summary = []
-    for i, (name, df) in enumerate(results.items()):
-        if df.empty:
-            continue
-        with cols[i % 2]:
-            fig, ax = plt.subplots(figsize=(7, 4))
-            ax.plot(df["Date"], df["Rate"], label=name)
-            ax.set_title(name)
-            ax.set_ylabel("Interest Rate (%)")
-            ax.grid(True)
-            ax.legend()
-            st.pyplot(fig)
-        if len(df) > 1:
-            rate_summary.append(f"{name}: {df['Rate'].iloc[-1]:.2f}%")
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(rate_summary), "Global Interest Rates"))
-else:
-    st.warning("No interest rate data loaded.")
 
