@@ -384,4 +384,47 @@ st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_st
 
 st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
 
+# =========================================================
+# 🏠 CoreLogic Daily Home Value Index
+# =========================================================
+st.header("🏠 CoreLogic Daily Home Value Index")
+
+try:
+    # Load Excel directly
+    df = pd.read_excel("corelogic_daily_index.xlsx")
+
+    # Ensure proper datetime format
+    df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+
+    # List the city columns exactly as in your file
+    cities = [
+        "Sydney (SYDD)",
+        "Melbourne (MELD)",
+        "Brisbane (inc Gold Coast) (BRID)",
+        "Adelaide (ADED)",
+        "Perth (PERD)",
+        "5 capital city aggregate (AUSD)"
+    ]
+
+    # Filter to available columns
+    available = [c for c in cities if c in df.columns]
+
+    # Plot the line chart
+    fig = px.line(df, x="Date", y=available, title="Daily Home Value Index Trends")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Year-over-year (or total period) change summary
+    yoy_stats = []
+    for c in available:
+        if len(df[c].dropna()) > 1:
+            change = (df[c].iloc[-1] / df[c].iloc[0] - 1) * 100
+            yoy_stats.append(f"{c}: {change:.2f}% change over period")
+
+    # Display stats + AI summary
+    st.markdown("**AI Summary (CoreLogic):** " + explain_with_gpt("\n".join(yoy_stats), "CoreLogic Home Value Index"))
+
+except Exception as e:
+    st.warning(f"Unable to load CoreLogic data: {e}")
+
+
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
