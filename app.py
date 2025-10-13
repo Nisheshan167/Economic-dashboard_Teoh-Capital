@@ -493,4 +493,144 @@ try:
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
 
+# =========================================================
+# 🇦🇺 Australian Population Growth by State
+# =========================================================
+st.header("🇦🇺 Australian Population Growth by State")
 
+try:
+    df_pop = pd.read_excel("population.xlsx", sheet_name="population")
+    df_pop.columns = [c.strip() for c in df_pop.columns]
+    df_pop["Period"] = pd.to_datetime(df_pop["Period"], format="%Y")
+
+    states = [c for c in df_pop.columns if c != "Period"]
+
+    # --- Plot total and states ---
+    fig, ax = plt.subplots(figsize=(10,5))
+    for s in states:
+        ax.plot(df_pop["Period"], df_pop[s], label=s)
+    ax.set_title("Population by State (ABS)")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Population ('000s)")
+    ax.legend(loc="upper left", ncol=2)
+    ax.grid(True)
+    st.pyplot(fig)
+
+    # --- Summary Table (Latest Year) ---
+    latest = df_pop.iloc[-1]
+    summary = pd.DataFrame({
+        "State": states,
+        "Population (latest year)": [latest[s] for s in states]
+    })
+    summary = summary.sort_values("Population (latest year)", ascending=False)
+    st.dataframe(summary.style.format({"Population (latest year)": "{:,.0f}"}))
+
+    # --- AI Summary ---
+    ai_lines = [f"{row.State}: {row['Population (latest year)']:,}" for _, row in summary.iterrows()]
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(ai_lines), "Australian State Populations"))
+
+except Exception as e:
+    st.warning(f"Unable to load population data: {e}")
+
+# =========================================================
+# 🌍 Global Population and Migration (World Bank API)
+# =========================================================
+st.header("🌍 Global Population & Migration Trends")
+
+from pandas_datareader import wb
+
+try:
+    indicators = {
+        "SP.POP.TOTL": "Population (Total)",
+        "SM.POP.NETM": "Net Migration"
+    }
+    countries = ["AU", "US", "GB", "CA", "JP", "EUU", "CN", "IN"]
+
+    df_wb = wb.download(indicator=list(indicators.keys()), country=countries, start=2000, end=2023)
+    df_wb = df_wb.rename(columns=indicators).reset_index()
+    df_wb = df_wb.rename(columns={"country": "Country", "year": "Year"})
+
+    # Plot global population trends
+    st.subheader("Global Population Growth (2000–2023)")
+    fig, ax = plt.subplots(figsize=(10,5))
+    for c in countries:
+        subset = df_wb[df_wb["Country"] == c]
+        ax.plot(subset["Year"], subset["Population (Total)"] / 1e6, label=c)
+    ax.set_title("Total Population (Millions)")
+    ax.set_ylabel("Population (Millions)")
+    ax.legend()
+    st.pyplot(fig)
+
+    # Net migration chart
+    st.subheader("Net Migration (2000–2023)")
+    fig, ax = plt.subplots(figsize=(10,5))
+    for c in countries:
+        subset = df_wb[df_wb["Country"] == c]
+        ax.plot(subset["Year"], subset["Net Migration"] / 1e3, label=c)
+    ax.set_title("Net Migration (Thousands)")
+    ax.legend()
+    st.pyplot(fig)
+
+    # AI summary
+    latest_data = df_wb[df_wb["Year"] == df_wb["Year"].max()]
+    lines = [
+        f"{row.Country}: population {row['Population (Total)'] / 1e6:.1f}M, net migration {row['Net Migration'] / 1e3:.0f}K"
+        for _, row in latest_data.iterrows()
+    ]
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Population & Migration"))
+
+except Exception as e:
+    st.warning(f"Unable to load World Bank data: {e}")
+
+# =========================================================
+# 📈 Vanguard Australia ETFs
+# =========================================================
+st.header("📈 Vanguard Australia ETFs Performance")
+
+try:
+    # Common Vanguard ETFs listed on ASX
+    vanguard_etfs = {
+        "VAS.AX": "Vanguard Australian Shares Index ETF",
+        "VGS.AX": "Vanguard MSCI International Shares Index ETF",
+        "VGE.AX": "Vanguard FTSE Emerging Markets Shares ETF",
+        "VAF.AX": "Vanguard Australian Fixed Interest ETF",
+        "VGAD.AX": "Vanguard MSCI International Shares (Hedged)",
+        "VAP.AX": "Vanguard Australian Property Securities ETF",
+    }
+
+    # User selection
+    selected = st.multiselect(
+        "Select Vanguard ETFs to display",
+        options=list(vanguard_etfs.keys()),
+        format_func=lambda x: vanguard_etfs[x],
+        default=["VAS.AX", "VGS.AX"]
+    )
+
+    if not selected:
+        st.warning("Please select at least one ETF to view.")
+    else:
+        period = st.selectbox("Select time period", ["1y", "5y"], index=0)
+        st.info(f"Fetching {period.upper()} historical data for selected ETFs...")
+
+        # Fetch and plot
+        fig, ax = plt.subplots(figsize=(10,5))
+        perf_stats = []
+
+        for ticker in selected:
+            data = yf.download(ticker, period=period, interval="1mo")["Close"].dropna()
+            data = data / data.iloc[0] * 100  # normalize to 100
+            ax.plot(data.index, data, label=vanguard_etfs[ticker])
+            change = (data.iloc[-1] / data.iloc[0] - 1) * 100
+            perf_stats.append(f"{vanguard_etfs[ticker]}: {change:+.2f}% over {period.upper()}")
+
+        ax.set_title(f"Vanguard ETF Total Return Index ({period.upper()})")
+        ax.set_ylabel("Indexed Performance (Base = 100)")
+        ax.legend()
+        ax.grid(True)
+        st.pyplot(fig)
+
+        # GPT summary
+        st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(perf_stats), "Vanguard ETF Performance"))
+
+except Exception as e:
+    st.warning(f"Unable to load Vanguard ETF data: {e}")
