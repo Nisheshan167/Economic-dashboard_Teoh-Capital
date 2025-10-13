@@ -425,6 +425,62 @@ try:
 
 except Exception as e:
     st.warning(f"Unable to load CoreLogic data: {e}")
+# =========================================================
+# 🌍 Global Central Bank Policy Rates (Trading Economics)
+# =========================================================
+st.header("🌍 Global Central Bank Policy Rates")
+
+import json
+
+@st.cache_data(ttl=86400)
+def load_te_interest_rates():
+    base = "https://api.tradingeconomics.com/interest_rate/country/"
+    countries = {
+        "Australia": "australia",
+        "United States": "united-states",
+        "Euro Area": "euro-area",
+        "Japan": "japan",
+        "United Kingdom": "united-kingdom",
+        "Canada": "canada"
+    }
+
+    dfs = {}
+    for label, slug in countries.items():
+        try:
+            url = f"{base}{slug}?c=guest:guest&f=json"
+            r = requests.get(url, timeout=20)
+            r.raise_for_status()
+            data = json.loads(r.text)
+            df = pd.DataFrame(data)
+            df["DateTime"] = pd.to_datetime(df["DateTime"], errors="coerce")
+            df = df[["DateTime", "Value"]].dropna().sort_values("DateTime")
+            dfs[label] = df
+        except Exception as e:
+            st.warning(f"Could not load {label}: {e}")
+    return dfs
+
+
+global_rates = load_te_interest_rates()
+
+if global_rates:
+    cols = st.columns(2)
+    stats = []
+    for i, (country, df) in enumerate(global_rates.items()):
+        with cols[i % 2]:
+            fig, ax = plt.subplots(figsize=(7, 4))
+            ax.plot(df["DateTime"], df["Value"], label=country)
+            ax.set_title(f"{country} – Policy Interest Rate")
+            ax.set_ylabel("%")
+            ax.legend()
+            ax.grid(True)
+            st.pyplot(fig)
+            if len(df) > 1:
+                change = df["Value"].iloc[-1] - df["Value"].iloc[-2]
+                stats.append(f"{country}: {df['Value'].iloc[-1]:.2f}% (Δ {change:+.2f} MoM)")
+
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(stats), "Global Central Bank Policy Rates"))
+else:
+    st.warning("No global interest rate data could be retrieved.")
 
 
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
