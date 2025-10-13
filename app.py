@@ -244,7 +244,7 @@ st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Hou
 # =========================================================
 st.header("🏠 CoreLogic Daily Home Value Index")
 try:
-    df = pd.read_excel("data/corelogic_daily_index.xlsx", sheet_name=0)
+    df = pd.read_excel("corelogic_daily_index.xlsx", sheet_name=0)
     df['Date'] = pd.to_datetime(df['Date'])
     cities = ['Sydney (SYDD)','Melbourne (MELD)','Brisbane (inc Gold Coast) (BRID)',
               'Adelaide (ADED)','Perth (PERD)','5 capital city aggregate (AUSD)']
