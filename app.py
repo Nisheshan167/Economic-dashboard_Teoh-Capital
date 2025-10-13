@@ -447,32 +447,46 @@ except Exception as e:
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
 
 # =========================================================
-# 🌍 Global Central Bank Policy Rates (via FRED)
+# 🌍 Global Central Bank Policy Rates (Manual Table)
 # =========================================================
 st.header("🌍 Global Central Bank Policy Rates")
 
-def load_fred_series(code, label):
-    try:
-        url = f"https://fred.stlouisfed.org/data/{code}.csv"
-        df = pd.read_csv(url)
-        df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
-        df.rename(columns={"DATE": "Date", df.columns[1]: "Rate"}, inplace=True)
-        df["Rate"] = pd.to_numeric(df["Rate"], errors="coerce")
-        df = df.dropna(subset=["Rate"])
-        return df[["Date", "Rate"]]
-    except Exception as e:
-        st.warning(f"Could not load {label}: {e}")
-        return pd.DataFrame(columns=["Date", "Rate"])
+try:
+    df_rates = pd.read_excel("global_interest_rates.xlsx")
+    df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce")
+    df_rates = df_rates.dropna(subset=["Date"])
+    countries = [c for c in df_rates.columns if c != "Date"]
 
-sources = {
-    "United States (Fed Funds Rate)": "FEDFUNDS",
-    "Euro Area (ECB Main Refinancing Rate)": "ECBMAIN",
-    "Japan (3M Interbank Rate)": "IR3TIB01JPM156N",
-    "United Kingdom (3M Interbank Rate)": "IR3TIB01GBM156N",
-    "Canada (3M Interbank Rate)": "IR3TIB01CAM156N"
-}
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(10,5))
+    for c in countries:
+        ax.plot(df_rates["Date"], df_rates[c], label=c)
+    ax.set_title("Policy Interest Rates by Country")
+    ax.set_ylabel("Rate (%)")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
 
-results = {}
+    # --- Summary table ---
+    latest = df_rates.iloc[-1]
+    summary = pd.DataFrame({
+        "Country": countries,
+        "Latest Rate (%)": [latest[c] for c in countries]
+    })
+
+    # Compute differential vs Australia if available
+    if "Australia (RBA)" in df_rates.columns:
+        au_rate = latest["Australia (RBA)"]
+        summary["Δ vs Australia (bps)"] = ((summary["Latest Rate (%)"] - au_rate) * 100).round(0)
+
+    st.dataframe(summary)
+
+    # --- AI summary ---
+    rate_lines = [f"{row.Country}: {row['Latest Rate (%)']:.2f}%" for _, row in summary.iterrows()]
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(rate_lines), "Global Central Bank Rates"))
+
+except Exception as e:
+    st.warning(f"Unable to load interest rate data: {e}")
 
 # Australia via RBA
 rba = load_rba_table("F1")
