@@ -6,6 +6,7 @@ from io import BytesIO
 from openai import OpenAI
 import yfinance as yf
 import numpy as np
+import plotly.express as px
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
