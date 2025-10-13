@@ -530,11 +530,6 @@ except Exception as e:
 
 
 
-# =========================================================
-# 📈 Vanguard Australian Shares Index ETF (VAS.AX)
-# =========================================================
-st.header("📈 Vanguard Australian Shares Index ETF (VAS.AX)")
-
 try:
     ticker = "VAS.AX"
     data = yf.download(ticker, period="5y", interval="1mo")["Close"].dropna()
@@ -548,18 +543,19 @@ try:
     ax.grid(True, linestyle="--", alpha=0.6)
     st.pyplot(fig)
 
-    # Summary
-    change_1y = (data.iloc[-1] / data.iloc[-12] - 1) * 100 if len(data) > 12 else np.nan
-    change_5y = (data.iloc[-1] / data.iloc[0] - 1) * 100
+    # Summary with explicit float conversion
+    change_1y = (
+        (float(data.iloc[-1]) / float(data.iloc[-12]) - 1) * 100
+        if len(data) > 12 else np.nan
+    )
+    change_5y = (float(data.iloc[-1]) / float(data.iloc[0]) - 1) * 100
+
     perf_text = f"5-Year Change: {change_5y:+.2f}% | 1-Year Change: {change_1y:+.2f}%"
     st.markdown(f"**{perf_text}**")
 
-    # AI summary
-    ai_summary = explain_with_gpt(perf_text, "Vanguard Australian Shares Index ETF (VAS.AX)")
-    st.markdown("**AI Summary:** " + ai_summary)
-
 except Exception as e:
     st.warning(f"Unable to load Vanguard ETF data: {e}")
+
 
 
 # =========================================================
@@ -609,21 +605,6 @@ try:
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
 
-import streamlit as st
-from fpdf import FPDF
-
-if st.button("Download PDF Report"):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Economic Dashboard Summary", ln=True)
-    pdf.cell(200, 10, txt="Key Indicators:", ln=True)
-    pdf.cell(200, 10, txt="- Inflation, Unemployment, and Population trends", ln=True)
-    pdf.cell(200, 10, txt="- Automatically updated with latest data", ln=True)
-    pdf.output("economic_dashboard.pdf")
-
-    with open("economic_dashboard.pdf", "rb") as f:
-        st.download_button("Download Report", f, file_name="Economic_Dashboard.pdf")
 
 
 
