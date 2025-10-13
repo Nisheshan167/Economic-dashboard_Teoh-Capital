@@ -7,3 +7,6 @@ requests
 openai
 yfinance
 plotly
+openpyxl
+setuptools
+pandas_datareader
