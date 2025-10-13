@@ -595,7 +595,7 @@ st.header("🌍 Global Central Bank Policy Rates")
 
 try:
     # Load and clean
-    df_rates = pd.read_excel("Global_interest_rates_data.xlsx")
+    df_rates = pd.read_excel("Global_interest_rates.xlsx")
     df_rates.columns = [c.strip() for c in df_rates.columns]
     df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce", format="%b-%Y")
     df_rates = df_rates.dropna(subset=["Date"]).sort_values("Date")
