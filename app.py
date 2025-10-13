@@ -452,7 +452,7 @@ st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed
 st.header("🇦🇺 Australian Population Growth by State")
 
 try:
-    df_pop = pd.read_excel("population.xlsx", sheet_name="population")
+    df_pop = pd.read_excel("Population.xlsx", sheet_name="population")
     df_pop.columns = [c.strip() for c in df_pop.columns]
     df_pop["Period"] = pd.to_datetime(df_pop["Period"], format="%Y")
 
