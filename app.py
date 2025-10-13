@@ -452,7 +452,7 @@ st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed
 st.header("🇦🇺 Australian Population Growth by State")
 
 try:
-    df_pop = pd.read_excel("Population.xlsx", sheet_name="population")
+    df_pop = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet")
     df_pop.columns = [c.strip() for c in df_pop.columns]
     df_pop["Period"] = pd.to_datetime(df_pop["Period"], format="%Y")
 
@@ -574,7 +574,7 @@ st.header("🌍 Global Central Bank Policy Rates")
 
 try:
     # Load and clean
-    df_rates = pd.read_excel("Global_interest_rates.xlsx")
+    df_rates = pd.read_excel("global_interest_rates.xlsx")
     df_rates.columns = [c.strip() for c in df_rates.columns]
     df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce", format="%b-%Y")
     df_rates = df_rates.dropna(subset=["Date"]).sort_values("Date")
