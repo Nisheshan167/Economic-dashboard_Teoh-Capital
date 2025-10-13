@@ -449,7 +449,7 @@ st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed
 # =========================================================
 # 🇦🇺 Australian Population Growth by State
 # =========================================================
-st.header("🇦🇺 Australian Population Growth by State")
+st.header("Australian Net migration by State")
 
 try:
     # Load Excel and find header row containing 'Period'
@@ -487,26 +487,7 @@ try:
         ax.grid(True, linestyle="--", alpha=0.6)
         st.pyplot(fig)
 
-        # --- Summary Table (latest year) ---
-        latest = df_pop.iloc[-1]
-        summary = pd.DataFrame({
-            "State": states,
-            "Population (latest year)": [latest[s] for s in states]
-        })
-        summary["Share of National (%)"] = (
-            summary["Population (latest year)"] / summary["Population (latest year)"].sum() * 100
-        ).round(1)
-        summary = summary.sort_values("Population (latest year)", ascending=False)
-        st.dataframe(summary.style.format({
-            "Population (latest year)": "{:,.0f}",
-            "Share of National (%)": "{:.1f}%"
-        }))
 
-        # --- AI Summary ---
-        ai_lines = [
-            f"{row.State}: {row['Population (latest year)']:,} ({row['Share of National (%)']:.1f}% of national population)"
-            for _, row in summary.iterrows()
-        ]
         st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(ai_lines), "Australian State Populations"))
 
 except Exception as e:
@@ -521,47 +502,58 @@ st.header("🌍 Global Population & Migration Trends")
 from pandas_datareader import wb
 
 try:
+    # Indicators
     indicators = {
         "SP.POP.TOTL": "Population (Total)",
         "SM.POP.NETM": "Net Migration"
     }
+
     countries = ["AU", "US", "GB", "CA", "JP", "EUU", "CN", "IN"]
 
-    df_wb = wb.download(indicator=list(indicators.keys()), country=countries, start=2000, end=2023)
-    df_wb = df_wb.rename(columns=indicators).reset_index()
-    df_wb = df_wb.rename(columns={"country": "Country", "year": "Year"})
+    # --- Fetch data from World Bank ---
+    df_pop = wb.data.DataFrame(indicators=list(indicators.keys()), countries=countries, range=(2000, 2023))
+    df_pop = df_pop.reset_index().rename(columns={"economy": "Country", "time": "Year"})
 
-    # Plot global population trends
+    # Rename indicator columns
+    df_pop = df_pop.rename(columns=indicators)
+
+    # --- Population chart ---
     st.subheader("Global Population Growth (2000–2023)")
     fig, ax = plt.subplots(figsize=(10,5))
     for c in countries:
-        subset = df_wb[df_wb["Country"] == c]
+        subset = df_pop[df_pop["Country"] == c]
         ax.plot(subset["Year"], subset["Population (Total)"] / 1e6, label=c)
     ax.set_title("Total Population (Millions)")
     ax.set_ylabel("Population (Millions)")
-    ax.legend()
+    ax.legend(loc="upper left", ncol=2)
+    ax.grid(True, linestyle="--", alpha=0.6)
     st.pyplot(fig)
 
-    # Net migration chart
+    # --- Net migration chart ---
     st.subheader("Net Migration (2000–2023)")
     fig, ax = plt.subplots(figsize=(10,5))
     for c in countries:
-        subset = df_wb[df_wb["Country"] == c]
-        ax.plot(subset["Year"], subset["Net Migration"] / 1e3, label=c)
+        subset = df_pop[df_pop["Country"] == c]
+        if subset["Net Migration"].notna().any():
+            ax.plot(subset["Year"], subset["Net Migration"] / 1e3, label=c)
     ax.set_title("Net Migration (Thousands)")
-    ax.legend()
+    ax.legend(loc="upper left", ncol=2)
+    ax.grid(True, linestyle="--", alpha=0.6)
     st.pyplot(fig)
 
-    # AI summary
-    latest_data = df_wb[df_wb["Year"] == df_wb["Year"].max()]
+    # --- AI Summary ---
+    latest_year = df_pop["Year"].max()
+    latest_data = df_pop[df_pop["Year"] == latest_year]
     lines = [
         f"{row.Country}: population {row['Population (Total)'] / 1e6:.1f}M, net migration {row['Net Migration'] / 1e3:.0f}K"
         for _, row in latest_data.iterrows()
+        if not pd.isna(row["Population (Total)"])
     ]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Population & Migration"))
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Population & Migration Trends"))
 
 except Exception as e:
     st.warning(f"Unable to load World Bank data: {e}")
+
 
 # =========================================================
 # 📈 Vanguard Australian Shares Index ETF (VAS.AX)
