@@ -452,35 +452,54 @@ st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed
 st.header("🇦🇺 Australian Population Growth by State")
 
 try:
+    # Load Excel sheet (updated name)
     df_pop = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet")
-    df_pop.columns = [c.strip() for c in df_pop.columns]
-    df_pop["Period"] = pd.to_datetime(df_pop["Period"], format="%Y")
+    df_pop.columns = df_pop.columns.astype(str).str.strip()  # Clean column names
 
-    states = [c for c in df_pop.columns if c != "Period"]
+    # --- Detect 'Period' column robustly ---
+    period_col = next((c for c in df_pop.columns if "period" in c.lower()), None)
+    if not period_col:
+        st.error(f"Could not find 'Period' column. Columns found: {list(df_pop.columns)}")
+    else:
+        df_pop = df_pop.rename(columns={period_col: "Period"})
+        df_pop["Period"] = pd.to_datetime(df_pop["Period"], errors="coerce", format="%Y")
+        df_pop = df_pop.dropna(subset=["Period"])
 
-    # --- Plot total and states ---
-    fig, ax = plt.subplots(figsize=(10,5))
-    for s in states:
-        ax.plot(df_pop["Period"], df_pop[s], label=s)
-    ax.set_title("Population by State (ABS)")
-    ax.set_xlabel("Year")
-    ax.set_ylabel("Population ('000s)")
-    ax.legend(loc="upper left", ncol=2)
-    ax.grid(True)
-    st.pyplot(fig)
+        # Select all other columns as states
+        states = [c for c in df_pop.columns if c != "Period"]
 
-    # --- Summary Table (Latest Year) ---
-    latest = df_pop.iloc[-1]
-    summary = pd.DataFrame({
-        "State": states,
-        "Population (latest year)": [latest[s] for s in states]
-    })
-    summary = summary.sort_values("Population (latest year)", ascending=False)
-    st.dataframe(summary.style.format({"Population (latest year)": "{:,.0f}"}))
+        # --- Plot population trends ---
+        fig, ax = plt.subplots(figsize=(10,5))
+        for s in states:
+            ax.plot(df_pop["Period"], df_pop[s], label=s)
+        ax.set_title("Population by State (ABS)")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Population ('000s)")
+        ax.legend(loc="upper left", ncol=2)
+        ax.grid(True, linestyle="--", alpha=0.6)
+        st.pyplot(fig)
 
-    # --- AI Summary ---
-    ai_lines = [f"{row.State}: {row['Population (latest year)']:,}" for _, row in summary.iterrows()]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(ai_lines), "Australian State Populations"))
+        # --- Summary table for latest year ---
+        latest = df_pop.iloc[-1]
+        summary = pd.DataFrame({
+            "State": states,
+            "Population (latest year)": [latest[s] for s in states]
+        })
+        summary["Share of National (%)"] = (
+            summary["Population (latest year)"] / summary["Population (latest year)"].sum() * 100
+        ).round(1)
+        summary = summary.sort_values("Population (latest year)", ascending=False)
+        st.dataframe(summary.style.format({
+            "Population (latest year)": "{:,.0f}",
+            "Share of National (%)": "{:.1f}%"
+        }))
+
+        # --- AI Summary ---
+        ai_lines = [
+            f"{row.State}: {row['Population (latest year)']:,} ({row['Share of National (%)']:.1f}% of national population)"
+            for _, row in summary.iterrows()
+        ]
+        st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(ai_lines), "Australian State Populations"))
 
 except Exception as e:
     st.warning(f"Unable to load population data: {e}")
@@ -614,4 +633,36 @@ try:
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
 
+# =========================================================
+# 🧱 Sector Allocation (VAS.AX)
+# =========================================================
+st.subheader("VAS Sector Allocation (Vanguard Australia Shares Index ETF)")
+
+try:
+    url = "https://www.vanguard.com.au/adviser/api/funds/VAS/portfolio-composition"
+    response = requests.get(url, timeout=15)
+    data = response.json()
+
+    # Extract top-level allocations
+    sectors = pd.DataFrame(data["sectorAllocations"])
+    sectors = sectors.rename(columns={"sectorName": "Sector", "weight": "Weight"})
+    sectors["Weight"] = sectors["Weight"].astype(float) * 100
+
+    # Bar chart
+    fig, ax = plt.subplots(figsize=(8,5))
+    sectors.sort_values("Weight", inplace=True)
+    ax.barh(sectors["Sector"], sectors["Weight"], color="tab:green")
+    ax.set_xlabel("Weight (%)")
+    ax.set_title("VAS Sector Allocation")
+    for i, v in enumerate(sectors["Weight"]):
+        ax.text(v + 0.3, i, f"{v:.1f}%", va="center")
+    st.pyplot(fig)
+
+    # Table + AI summary
+    st.dataframe(sectors.style.format({"Weight": "{:.2f}%"}))
+    lines = [f"{row.Sector}: {row.Weight:.2f}%" for _, row in sectors.iterrows()]
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "VAS Sector Allocation"))
+
+except Exception as e:
+    st.warning(f"Unable to load sector allocation data: {e}")
 
