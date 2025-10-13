@@ -447,53 +447,6 @@ except Exception as e:
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
 
 # =========================================================
-# 🌍 Global Central Bank Policy Rates (from Excel)
-# =========================================================
-st.header("🌍 Global Central Bank Policy Rates")
-
-try:
-    # Load and clean
-    df_rates = pd.read_excel("global_interest_rates.xlsx")
-    df_rates.columns = [c.strip() for c in df_rates.columns]
-    df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce", format="%b-%Y")
-    df_rates = df_rates.dropna(subset=["Date"]).sort_values("Date")
-
-    countries = [c for c in df_rates.columns if c != "Date"]
-
-    # --- Line chart ---
-    fig, ax = plt.subplots(figsize=(10, 5))
-    for c in countries:
-        ax.plot(df_rates["Date"], df_rates[c], label=c)
-    ax.set_title("Global Central Bank Policy Rates (Monthly)")
-    ax.set_ylabel("Policy Rate (%)")
-    ax.set_xlabel("Date")
-    ax.legend()
-    ax.grid(True)
-    st.pyplot(fig)
-
-    # --- Summary table ---
-    latest = df_rates.iloc[-1]
-    summary = pd.DataFrame({
-        "Country": countries,
-        "Latest Rate (%)": [latest[c] for c in countries]
-    })
-
-    # Compare vs Australia
-    if "Australia" in summary["Country"].values:
-        au_rate = float(summary.loc[summary["Country"] == "Australia", "Latest Rate (%)"].values[0])
-        summary["Δ vs Australia (bps)"] = ((summary["Latest Rate (%)"] - au_rate) * 100).round(0)
-
-    st.subheader("Latest Policy Rates")
-    st.dataframe(summary.style.format({"Latest Rate (%)": "{:.2f}", "Δ vs Australia (bps)": "{:+.0f}"}))
-
-    # --- AI Summary ---
-    lines = [f"{r['Country']}: {r['Latest Rate (%)']:.2f}%" for _, r in summary.iterrows()]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Central Bank Policy Rates"))
-
-except Exception as e:
-    st.warning(f"Unable to load interest rate data: {e}")
-
-# =========================================================
 # 🇦🇺 Australian Population Growth by State
 # =========================================================
 st.header("🇦🇺 Australian Population Growth by State")
@@ -634,3 +587,51 @@ try:
 
 except Exception as e:
     st.warning(f"Unable to load Vanguard ETF data: {e}")
+
+# =========================================================
+# 🌍 Global Central Bank Policy Rates (from Excel)
+# =========================================================
+st.header("🌍 Global Central Bank Policy Rates")
+
+try:
+    # Load and clean
+    df_rates = pd.read_excel("Global_interest_rates_data.xlsx")
+    df_rates.columns = [c.strip() for c in df_rates.columns]
+    df_rates["Date"] = pd.to_datetime(df_rates["Date"], errors="coerce", format="%b-%Y")
+    df_rates = df_rates.dropna(subset=["Date"]).sort_values("Date")
+
+    countries = [c for c in df_rates.columns if c != "Date"]
+
+    # --- Line chart ---
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for c in countries:
+        ax.plot(df_rates["Date"], df_rates[c], label=c)
+    ax.set_title("Global Central Bank Policy Rates (Monthly)")
+    ax.set_ylabel("Policy Rate (%)")
+    ax.set_xlabel("Date")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
+    # --- Summary table ---
+    latest = df_rates.iloc[-1]
+    summary = pd.DataFrame({
+        "Country": countries,
+        "Latest Rate (%)": [latest[c] for c in countries]
+    })
+
+    # Compare vs Australia
+    if "Australia" in summary["Country"].values:
+        au_rate = float(summary.loc[summary["Country"] == "Australia", "Latest Rate (%)"].values[0])
+        summary["Δ vs Australia (bps)"] = ((summary["Latest Rate (%)"] - au_rate) * 100).round(0)
+
+    st.subheader("Latest Policy Rates")
+    st.dataframe(summary.style.format({"Latest Rate (%)": "{:.2f}", "Δ vs Australia (bps)": "{:+.0f}"}))
+
+    # --- AI Summary ---
+    lines = [f"{r['Country']}: {r['Latest Rate (%)']:.2f}%" for _, r in summary.iterrows()]
+    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Central Bank Policy Rates"))
+
+except Exception as e:
+    st.warning(f"Unable to load interest rate data: {e}")
+
