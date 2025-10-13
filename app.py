@@ -390,13 +390,17 @@ st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_st
 st.header("🏠 CoreLogic Daily Home Value Index")
 
 try:
-    # Load Excel directly
     df = pd.read_excel("corelogic_daily_index.xlsx")
 
-    # Ensure proper datetime format
+    # Clean column names: remove BOM, spaces, case differences
+    df.columns = df.columns.str.replace("\ufeff", "", regex=True).str.strip()
+
+    if "Date" not in df.columns:
+        st.error(f"Columns found: {list(df.columns)}")
+        raise KeyError("Date column not found after cleaning")
+
     df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
 
-    # List the city columns exactly as in your file
     cities = [
         "Sydney (SYDD)",
         "Melbourne (MELD)",
@@ -405,82 +409,80 @@ try:
         "Perth (PERD)",
         "5 capital city aggregate (AUSD)"
     ]
-
-    # Filter to available columns
     available = [c for c in cities if c in df.columns]
 
-    # Plot the line chart
-    fig = px.line(df, x="Date", y=available, title="Daily Home Value Index Trends")
-    st.plotly_chart(fig, use_container_width=True)
+    if not available:
+        st.error("No valid city columns found.")
+    else:
+        fig = px.line(df, x="Date", y=available, title="CoreLogic Daily Home Value Index")
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Year-over-year (or total period) change summary
-    yoy_stats = []
-    for c in available:
-        if len(df[c].dropna()) > 1:
-            change = (df[c].iloc[-1] / df[c].iloc[0] - 1) * 100
-            yoy_stats.append(f"{c}: {change:.2f}% change over period")
+        yoy_stats = []
+        for c in available:
+            if len(df[c].dropna()) > 1:
+                change = (df[c].iloc[-1] / df[c].iloc[0] - 1) * 100
+                yoy_stats.append(f"{c}: {change:.2f}% change over period")
 
-    # Display stats + AI summary
-    st.markdown("**AI Summary (CoreLogic):** " + explain_with_gpt("\n".join(yoy_stats), "CoreLogic Home Value Index"))
-
+        st.markdown("**AI Summary (CoreLogic):** " +
+                    explain_with_gpt("\n".join(yoy_stats), "CoreLogic Home Value Index"))
 except Exception as e:
     st.warning(f"Unable to load CoreLogic data: {e}")
+
 # =========================================================
-# 🌍 Global Central Bank Policy Rates (Trading Economics)
+# 🌍 Global Central Bank Policy Rates (Trading Economics – Web Feed)
 # =========================================================
 st.header("🌍 Global Central Bank Policy Rates")
 
-import json
-
 @st.cache_data(ttl=86400)
 def load_te_interest_rates():
-    base = "https://api.tradingeconomics.com/interest_rate/country/"
-    countries = {
-        "Australia": "australia",
-        "United States": "united-states",
-        "Euro Area": "euro-area",
-        "Japan": "japan",
-        "United Kingdom": "united-kingdom",
-        "Canada": "canada"
+    feeds = {
+        "Australia": "https://api.tradingeconomics.com/historical/country/australia/indicator/interest%20rate?c=guest:guest",
+        "United States": "https://api.tradingeconomics.com/historical/country/united%20states/indicator/interest%20rate?c=guest:guest",
+        "Euro Area": "https://api.tradingeconomics.com/historical/country/euro%20area/indicator/interest%20rate?c=guest:guest",
+        "Japan": "https://api.tradingeconomics.com/historical/country/japan/indicator/interest%20rate?c=guest:guest",
+        "United Kingdom": "https://api.tradingeconomics.com/historical/country/united%20kingdom/indicator/interest%20rate?c=guest:guest",
+        "Canada": "https://api.tradingeconomics.com/historical/country/canada/indicator/interest%20rate?c=guest:guest",
     }
 
     dfs = {}
-    for label, slug in countries.items():
+    for name, url in feeds.items():
         try:
-            url = f"{base}{slug}?c=guest:guest&f=json"
             r = requests.get(url, timeout=20)
             r.raise_for_status()
-            data = json.loads(r.text)
-            df = pd.DataFrame(data)
-            df["DateTime"] = pd.to_datetime(df["DateTime"], errors="coerce")
-            df = df[["DateTime", "Value"]].dropna().sort_values("DateTime")
-            dfs[label] = df
+            data = pd.DataFrame(r.json())
+            if not data.empty and "DateTime" in data.columns:
+                data["DateTime"] = pd.to_datetime(data["DateTime"], errors="coerce")
+                data = data.sort_values("DateTime")
+                dfs[name] = data
         except Exception as e:
-            st.warning(f"Could not load {label}: {e}")
+            st.warning(f"Could not load {name}: {e}")
     return dfs
 
 
 global_rates = load_te_interest_rates()
 
 if global_rates:
-    cols = st.columns(2)
     stats = []
-    for i, (country, df) in enumerate(global_rates.items()):
+    cols = st.columns(2)
+    for i, (name, df) in enumerate(global_rates.items()):
         with cols[i % 2]:
             fig, ax = plt.subplots(figsize=(7, 4))
-            ax.plot(df["DateTime"], df["Value"], label=country)
-            ax.set_title(f"{country} – Policy Interest Rate")
+            ax.plot(df["DateTime"], df["Value"], label=name)
+            ax.set_title(f"{name} Policy Rate (%)")
             ax.set_ylabel("%")
             ax.legend()
             ax.grid(True)
             st.pyplot(fig)
-            if len(df) > 1:
-                change = df["Value"].iloc[-1] - df["Value"].iloc[-2]
-                stats.append(f"{country}: {df['Value'].iloc[-1]:.2f}% (Δ {change:+.2f} MoM)")
 
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(stats), "Global Central Bank Policy Rates"))
+            if len(df) > 1:
+                latest, prev = df["Value"].iloc[-1], df["Value"].iloc[-2]
+                change = latest - prev
+                stats.append(f"{name}: {latest:.2f}% (Δ {change:+.2f} MoM)")
+
+    st.markdown("**AI Summary (Global Rates):** " +
+                explain_with_gpt("\n".join(stats), "Global Central Bank Policy Rates"))
 else:
-    st.warning("No global interest rate data could be retrieved.")
+    st.warning("No data retrieved from Trading Economics.")
 
 
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
