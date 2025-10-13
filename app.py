@@ -244,18 +244,40 @@ st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Hou
 # =========================================================
 st.header("🏠 CoreLogic Daily Home Value Index")
 try:
-    df = pd.read_excel("corelogic_daily_index.xlsx", sheet_name=0)
-    df['Date'] = pd.to_datetime(df['Date'])
-    cities = ['Sydney (SYDD)','Melbourne (MELD)','Brisbane (inc Gold Coast) (BRID)',
-              'Adelaide (ADED)','Perth (PERD)','5 capital city aggregate (AUSD)']
-    available = [c for c in cities if c in df.columns]
-    fig = px.line(df, x='Date', y=available, title="Daily Home Value Index Trends")
-    st.plotly_chart(fig, use_container_width=True)
-    yoy = []
-    for c in available:
-        change = (df[c].iloc[-1]/df[c].iloc[0]-1)*100
-        yoy.append(f"{c}: {change:.2f}% change over past year")
-    st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy), "CoreLogic Home Value Index"))
+    # Use repo path: data/corelogic_daily_index.xlsx
+    df_cl = pd.read_excel("data/corelogic_daily_index.xlsx", header=0)
+    # Clean headers and find date column robustly
+    df_cl.columns = df_cl.columns.map(lambda x: str(x).strip())
+    date_col = next((c for c in df_cl.columns if "date" in c.lower()), None)
+    if not date_col:
+        st.error("❌ Could not find a 'Date' column in the CoreLogic file.")
+    else:
+        df_cl[date_col] = pd.to_datetime(df_cl[date_col], errors="coerce")
+        df_cl = df_cl.dropna(subset=[date_col])
+
+        cities = [
+            'Sydney (SYDD)','Melbourne (MELD)',
+            'Brisbane (inc Gold Coast) (BRID)','Adelaide (ADED)',
+            'Perth (PERD)','5 capital city aggregate (AUSD)'
+        ]
+        available = [c for c in cities if c in df_cl.columns]
+
+        if available:
+            fig = px.line(df_cl, x=date_col, y=available,
+                          title="Daily Home Value Index Trends",
+                          labels={"value":"Index","variable":"City"})
+            st.plotly_chart(fig, use_container_width=True)
+
+            yoy = []
+            for c in available:
+                try:
+                    change = (df_cl[c].iloc[-1]/df_cl[c].iloc[0]-1)*100
+                    yoy.append(f"{c}: {change:.2f}% change over selected period")
+                except Exception:
+                    pass
+            st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy), "CoreLogic Home Value Index"))
+        else:
+            st.warning("No city columns found in CoreLogic file.")
 except Exception as e:
     st.warning(f"Unable to load CoreLogic data: {e}")
 
@@ -264,6 +286,7 @@ except Exception as e:
 # =========================================================
 st.header("👥 Population Growth & Migration (ABS)")
 try:
+    # Placeholder ABS pull (confirm exact table you want later)
     abs_url = "https://www.abs.gov.au/statistics/people/population/national-state-and-territory-population/latest-release/downloads/31010do002_202406.csv"
     df_abs = pd.read_csv(abs_url, skiprows=8)
     df_abs = df_abs.rename(columns={df_abs.columns[0]: "Region"})
@@ -284,6 +307,7 @@ def plot_yf(ticker, title, period="5y", freq="1mo"):
     ax.set_title(title)
     ax.set_ylabel("Index / FX")
     ax.legend()
+    ax.grid(True)
     st.pyplot(fig)
     if len(data)>13:
         latest,prev,yoy = float(data.iloc[-1]),float(data.iloc[-2]),float(data.iloc[-13])
@@ -302,4 +326,94 @@ with col1: eq_stats.append(plot_yf("^AXJO", "ASX200 Index"))
 with col2: eq_stats.append(plot_yf("^GSPC", "S&P500 Index"))
 st.markdown("**AI Summary (Equities):** " + explain_with_gpt("\n".join(eq_stats), "Equity Indices"))
 
-st.caption("Data sources: RBA Statistical Tables, CoreLogic, ABS, Yahoo Finance. Figures computed automatically at run-time.")
+# =========================================================
+# 9) Global Policy Rates (US, EU, Japan, UK, Canada)
+# =========================================================
+st.header("🌍 Global Central Bank Policy Rates")
+
+@st.cache_data(ttl=86400)
+def load_global_rates():
+    urls = {
+        "United States (Fed Funds Rate)": "https://fred.stlouisfed.org/data/FEDFUNDS.csv",
+        "Euro Area (ECB Main Refinancing Rate)": "https://fred.stlouisfed.org/data/ECBMAINREFI.csv",
+        "Japan (BOJ Policy Rate)": "https://fred.stlouisfed.org/data/JPNPOLIR.csv",
+        "United Kingdom (BOE Base Rate)": "https://fred.stlouisfed.org/data/BOERATE.csv",
+        "Canada (BoC Overnight Rate)": "https://fred.stlouisfed.org/data/CADOVERNIGHT.csv"
+    }
+    dfs = {}
+    for name, url in urls.items():
+        try:
+            df = pd.read_csv(url)
+            df = df.rename(columns={df.columns[0]: "Date", df.columns[1]: "Rate"})
+            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+            df["Rate"] = pd.to_numeric(df["Rate"], errors="coerce")
+            df = df.dropna(subset=["Rate"])
+            df = df[df["Date"] >= pd.to_datetime("2015-01-01")]  # last ~10 years
+            dfs[name] = df
+        except Exception as e:
+            st.warning(f"Could not load {name}: {e}")
+    return dfs
+
+global_rates = load_global_rates()
+
+cols = st.columns(3)
+i = 0
+for name, df in global_rates.items():
+    with cols[i % 3]:
+        fig, ax = plt.subplots(figsize=(5,4))
+        ax.plot(df["Date"], df["Rate"], label=name)
+        ax.set_title(name)
+        ax.set_ylabel("%")
+        ax.grid(True)
+        st.pyplot(fig)
+    i += 1
+
+rate_stats = []
+for name, df in global_rates.items():
+    if len(df) > 0:
+        latest_val = float(df["Rate"].iloc[-1])
+        latest_date = df["Date"].iloc[-1].strftime("%b %Y")
+        rate_stats.append(f"{name} ({latest_date}): {latest_val:.2f}%")
+
+st.markdown("**AI Summary (Global Interest Rates):** " + explain_with_gpt("\n".join(rate_stats), "Global Policy Rates"))
+
+# =========================================================
+# 10) Vanguard Global Market ETFs
+# =========================================================
+st.header("📈 Vanguard Global Market Indices")
+
+def plot_vanguard(ticker, title, period="5y", freq="1mo"):
+    data = yf.download(ticker, period=period, interval=freq)["Close"].dropna()
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.plot(data.index, data, label=title)
+    ax.set_title(title)
+    ax.set_ylabel("Price (USD / AUD)")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
+    if len(data) > 13:
+        latest, yoy = float(data.iloc[-1]), float(data.iloc[-13])
+        yoy_change = ((latest / yoy) - 1) * 100
+        return f"{title} ({data.index[-1].strftime('%b %Y')}) — YoY: {yoy_change:+.2f}%"
+    return f"{title}: insufficient data"
+
+vanguard_tickers = {
+    "VTI (US Total Market)": "VTI",
+    "VGK (Europe ETF)": "VGK",
+    "EWJ (Japan ETF)": "EWJ",
+    "VAS (Australia ETF)": "VAS.AX",
+    "BNDX (Global Bonds ex-US)": "BNDX",
+}
+
+vg_stats = []
+cols = st.columns(2)
+i = 0
+for label, ticker in vanguard_tickers.items():
+    with cols[i % 2]:
+        vg_stats.append(plot_vanguard(ticker, label))
+    i += 1
+
+st.markdown("**AI Summary (Vanguard ETFs):** " + explain_with_gpt("\n".join(vg_stats), "Vanguard Global Indices"))
+
+st.caption("Data sources: RBA Statistical Tables, CoreLogic, ABS, Yahoo Finance, FRED. Figures computed automatically at run-time.")
