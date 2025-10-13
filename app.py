@@ -390,99 +390,57 @@ st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_st
 st.header("🏠 CoreLogic Daily Home Value Index")
 
 try:
-    df = pd.read_excel("corelogic_daily_index.xlsx")
+    # Read the Excel file and detect the real header row
+    df_raw = pd.read_excel("corelogic_daily_index.xlsx", header=None)
 
-    # Clean column names: remove BOM, spaces, case differences
-    df.columns = df.columns.str.replace("\ufeff", "", regex=True).str.strip()
+    # Find the row that contains the actual column headers (starts with 'Date')
+    header_row = None
+    for i in range(len(df_raw)):
+        if df_raw.iloc[i].astype(str).str.contains("Date", case=False).any():
+            header_row = i
+            break
 
-    if "Date" not in df.columns:
-        st.error(f"Columns found: {list(df.columns)}")
-        raise KeyError("Date column not found after cleaning")
-
-    df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
-
-    cities = [
-        "Sydney (SYDD)",
-        "Melbourne (MELD)",
-        "Brisbane (inc Gold Coast) (BRID)",
-        "Adelaide (ADED)",
-        "Perth (PERD)",
-        "5 capital city aggregate (AUSD)"
-    ]
-    available = [c for c in cities if c in df.columns]
-
-    if not available:
-        st.error("No valid city columns found.")
+    if header_row is None:
+        st.error("Couldn't find a header row containing 'Date'.")
     else:
-        fig = px.line(df, x="Date", y=available, title="CoreLogic Daily Home Value Index")
-        st.plotly_chart(fig, use_container_width=True)
+        # Re-read the file with the detected header row
+        df = pd.read_excel("corelogic_daily_index.xlsx", header=header_row)
 
-        yoy_stats = []
-        for c in available:
-            if len(df[c].dropna()) > 1:
-                change = (df[c].iloc[-1] / df[c].iloc[0] - 1) * 100
-                yoy_stats.append(f"{c}: {change:.2f}% change over period")
+        # Clean up column names
+        df.columns = df.columns.str.strip()
+        df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+        df = df.dropna(subset=["Date"])
 
-        st.markdown("**AI Summary (CoreLogic):** " +
-                    explain_with_gpt("\n".join(yoy_stats), "CoreLogic Home Value Index"))
+        cities = [
+            "Sydney (SYDD)",
+            "Melbourne (MELD)",
+            "Brisbane (inc Gold Coast) (BRID)",
+            "Adelaide (ADED)",
+            "Perth (PERD)",
+            "5 capital city aggregate (AUSD)"
+        ]
+        available = [c for c in cities if c in df.columns]
+
+        if not available:
+            st.error(f"No valid city columns found. Columns detected: {list(df.columns)}")
+        else:
+            fig = px.line(df, x="Date", y=available,
+                          title="CoreLogic Daily Home Value Index Trends")
+            st.plotly_chart(fig, use_container_width=True)
+
+            yoy_stats = []
+            for c in available:
+                if len(df[c].dropna()) > 1:
+                    change = (df[c].iloc[-1] / df[c].iloc[0] - 1) * 100
+                    yoy_stats.append(f"{c}: {change:.2f}% change over period")
+
+            st.markdown("**AI Summary (CoreLogic):** " +
+                        explain_with_gpt("\n".join(yoy_stats),
+                                         "CoreLogic Home Value Index"))
+
 except Exception as e:
     st.warning(f"Unable to load CoreLogic data: {e}")
 
-# =========================================================
-# 🌍 Global Central Bank Policy Rates (Trading Economics – Web Feed)
-# =========================================================
-st.header("🌍 Global Central Bank Policy Rates")
-
-@st.cache_data(ttl=86400)
-def load_te_interest_rates():
-    feeds = {
-        "Australia": "https://api.tradingeconomics.com/historical/country/australia/indicator/interest%20rate?c=guest:guest",
-        "United States": "https://api.tradingeconomics.com/historical/country/united%20states/indicator/interest%20rate?c=guest:guest",
-        "Euro Area": "https://api.tradingeconomics.com/historical/country/euro%20area/indicator/interest%20rate?c=guest:guest",
-        "Japan": "https://api.tradingeconomics.com/historical/country/japan/indicator/interest%20rate?c=guest:guest",
-        "United Kingdom": "https://api.tradingeconomics.com/historical/country/united%20kingdom/indicator/interest%20rate?c=guest:guest",
-        "Canada": "https://api.tradingeconomics.com/historical/country/canada/indicator/interest%20rate?c=guest:guest",
-    }
-
-    dfs = {}
-    for name, url in feeds.items():
-        try:
-            r = requests.get(url, timeout=20)
-            r.raise_for_status()
-            data = pd.DataFrame(r.json())
-            if not data.empty and "DateTime" in data.columns:
-                data["DateTime"] = pd.to_datetime(data["DateTime"], errors="coerce")
-                data = data.sort_values("DateTime")
-                dfs[name] = data
-        except Exception as e:
-            st.warning(f"Could not load {name}: {e}")
-    return dfs
-
-
-global_rates = load_te_interest_rates()
-
-if global_rates:
-    stats = []
-    cols = st.columns(2)
-    for i, (name, df) in enumerate(global_rates.items()):
-        with cols[i % 2]:
-            fig, ax = plt.subplots(figsize=(7, 4))
-            ax.plot(df["DateTime"], df["Value"], label=name)
-            ax.set_title(f"{name} Policy Rate (%)")
-            ax.set_ylabel("%")
-            ax.legend()
-            ax.grid(True)
-            st.pyplot(fig)
-
-            if len(df) > 1:
-                latest, prev = df["Value"].iloc[-1], df["Value"].iloc[-2]
-                change = latest - prev
-                stats.append(f"{name}: {latest:.2f}% (Δ {change:+.2f} MoM)")
-
-    st.markdown("**AI Summary (Global Rates):** " +
-                explain_with_gpt("\n".join(stats), "Global Central Bank Policy Rates"))
-else:
-    st.warning("No data retrieved from Trading Economics.")
 
 
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
