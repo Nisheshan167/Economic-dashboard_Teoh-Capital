@@ -10,3 +10,4 @@ plotly
 openpyxl
 setuptools
 pandas_datareader
+fpdf==1.7.2
