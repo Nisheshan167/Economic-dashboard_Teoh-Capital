@@ -452,20 +452,28 @@ st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed
 st.header("🇦🇺 Australian Population Growth by State")
 
 try:
-    # Load Excel sheet (updated name)
-    df_pop = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet")
-    df_pop.columns = df_pop.columns.astype(str).str.strip()  # Clean column names
+    # Load Excel and find header row containing 'Period'
+    df_raw = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet", header=None)
+    header_row = None
+    for i in range(len(df_raw)):
+        if df_raw.iloc[i].astype(str).str.contains("Period", case=False).any():
+            header_row = i
+            break
 
-    # --- Detect 'Period' column robustly ---
-    period_col = next((c for c in df_pop.columns if "period" in c.lower()), None)
-    if not period_col:
-        st.error(f"Could not find 'Period' column. Columns found: {list(df_pop.columns)}")
+    if header_row is None:
+        st.error(f"Could not find header row with 'Period'. Rows detected: {len(df_raw)}")
     else:
+        # Re-read with correct header row
+        df_pop = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet", header=header_row)
+        df_pop.columns = df_pop.columns.astype(str).str.strip()
+
+        # Rename & clean
+        period_col = next((c for c in df_pop.columns if "period" in c.lower()), None)
         df_pop = df_pop.rename(columns={period_col: "Period"})
         df_pop["Period"] = pd.to_datetime(df_pop["Period"], errors="coerce", format="%Y")
         df_pop = df_pop.dropna(subset=["Period"])
 
-        # Select all other columns as states
+        # Select remaining columns as states
         states = [c for c in df_pop.columns if c != "Period"]
 
         # --- Plot population trends ---
@@ -479,7 +487,7 @@ try:
         ax.grid(True, linestyle="--", alpha=0.6)
         st.pyplot(fig)
 
-        # --- Summary table for latest year ---
+        # --- Summary Table (latest year) ---
         latest = df_pop.iloc[-1]
         summary = pd.DataFrame({
             "State": states,
@@ -503,6 +511,7 @@ try:
 
 except Exception as e:
     st.warning(f"Unable to load population data: {e}")
+
 
 # =========================================================
 # 🌍 Global Population and Migration (World Bank API)
