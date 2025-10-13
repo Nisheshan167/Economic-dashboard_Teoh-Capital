@@ -536,57 +536,36 @@ except Exception as e:
     st.warning(f"Unable to load World Bank data: {e}")
 
 # =========================================================
-# 📈 Vanguard Australia ETFs
+# 📈 Vanguard Australian Shares Index ETF (VAS.AX)
 # =========================================================
-st.header("📈 Vanguard Australia ETFs Performance")
+st.header("📈 Vanguard Australian Shares Index ETF (VAS.AX)")
 
 try:
-    # Common Vanguard ETFs listed on ASX
-    vanguard_etfs = {
-        "VAS.AX": "Vanguard Australian Shares Index ETF",
-        "VGS.AX": "Vanguard MSCI International Shares Index ETF",
-        "VGE.AX": "Vanguard FTSE Emerging Markets Shares ETF",
-        "VAF.AX": "Vanguard Australian Fixed Interest ETF",
-        "VGAD.AX": "Vanguard MSCI International Shares (Hedged)",
-        "VAP.AX": "Vanguard Australian Property Securities ETF",
-    }
+    ticker = "VAS.AX"
+    data = yf.download(ticker, period="5y", interval="1mo")["Close"].dropna()
+    data = data / data.iloc[0] * 100  # Normalize to 100 for indexed performance
 
-    # User selection
-    selected = st.multiselect(
-        "Select Vanguard ETFs to display",
-        options=list(vanguard_etfs.keys()),
-        format_func=lambda x: vanguard_etfs[x],
-        default=["VAS.AX", "VGS.AX"]
-    )
+    fig, ax = plt.subplots(figsize=(10,5))
+    ax.plot(data.index, data, color="tab:blue", linewidth=2)
+    ax.set_title("Vanguard Australian Shares Index ETF (VAS.AX) — 5-Year Indexed Performance")
+    ax.set_ylabel("Indexed Price (Base = 100)")
+    ax.set_xlabel("Date")
+    ax.grid(True, linestyle="--", alpha=0.6)
+    st.pyplot(fig)
 
-    if not selected:
-        st.warning("Please select at least one ETF to view.")
-    else:
-        period = st.selectbox("Select time period", ["1y", "5y"], index=0)
-        st.info(f"Fetching {period.upper()} historical data for selected ETFs...")
+    # Summary
+    change_1y = (data.iloc[-1] / data.iloc[-12] - 1) * 100 if len(data) > 12 else np.nan
+    change_5y = (data.iloc[-1] / data.iloc[0] - 1) * 100
+    perf_text = f"5-Year Change: {change_5y:+.2f}% | 1-Year Change: {change_1y:+.2f}%"
+    st.markdown(f"**{perf_text}**")
 
-        # Fetch and plot
-        fig, ax = plt.subplots(figsize=(10,5))
-        perf_stats = []
-
-        for ticker in selected:
-            data = yf.download(ticker, period=period, interval="1mo")["Close"].dropna()
-            data = data / data.iloc[0] * 100  # normalize to 100
-            ax.plot(data.index, data, label=vanguard_etfs[ticker])
-            change = (data.iloc[-1] / data.iloc[0] - 1) * 100
-            perf_stats.append(f"{vanguard_etfs[ticker]}: {change:+.2f}% over {period.upper()}")
-
-        ax.set_title(f"Vanguard ETF Total Return Index ({period.upper()})")
-        ax.set_ylabel("Indexed Performance (Base = 100)")
-        ax.legend()
-        ax.grid(True)
-        st.pyplot(fig)
-
-        # GPT summary
-        st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(perf_stats), "Vanguard ETF Performance"))
+    # AI summary
+    ai_summary = explain_with_gpt(perf_text, "Vanguard Australian Shares Index ETF (VAS.AX)")
+    st.markdown("**AI Summary:** " + ai_summary)
 
 except Exception as e:
     st.warning(f"Unable to load Vanguard ETF data: {e}")
+
 
 # =========================================================
 # 🌍 Global Central Bank Policy Rates (from Excel)
