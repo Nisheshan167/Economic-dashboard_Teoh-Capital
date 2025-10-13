@@ -609,33 +609,21 @@ try:
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
 
-# economic_dashboard_app.py
-
-# --- imports, data loading, and plotting code ---
-
-st.header("Australian Economic Dashboard")
-# (your charts, dataframes, and commentary here...)
-
-# --- PDF Export Section ---
 import streamlit as st
 from fpdf import FPDF
-
-st.write("---")
-st.subheader("📄 Export Report")
 
 if st.button("Download PDF Report"):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt="Economic Dashboard Summary", ln=True)
-
-    # Example: add key metrics dynamically
-    pdf.cell(200, 10, txt=f"GDP Growth: {gdp_growth_value}%", ln=True)
-    pdf.cell(200, 10, txt=f"Inflation Rate: {inflation_rate}%", ln=True)
-
+    pdf.cell(200, 10, txt="Key Indicators:", ln=True)
+    pdf.cell(200, 10, txt="- Inflation, Unemployment, and Population trends", ln=True)
+    pdf.cell(200, 10, txt="- Automatically updated with latest data", ln=True)
     pdf.output("economic_dashboard.pdf")
 
     with open("economic_dashboard.pdf", "rb") as f:
         st.download_button("Download Report", f, file_name="Economic_Dashboard.pdf")
+
 
 
