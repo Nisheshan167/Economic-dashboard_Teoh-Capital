@@ -305,28 +305,29 @@ else:
     activity_summary = explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels")
     st.markdown("**AI Summary:** " + activity_summary)
 
-    # --- Combine figures pairwise for PDF export ---
-combined_activity_figs = []
-for i in range(0, len(activity_figs), 2):
-    if i + 1 < len(activity_figs):
-        # use the resolved labels for the title
-        left_label  = resolved[i][1]
-        right_label = resolved[i + 1][1]
-        combined_fig = combine_side_by_side(
-            activity_figs[i],
-            activity_figs[i + 1]
-        )
-        combined_activity_figs.append(combined_fig)
-    else:
-        combined_activity_figs.append(activity_figs[i])
+    
+# --- Combine figures pairwise for PDF export ---
+    combined_activity_figs = []
+    for i in range(0, len(activity_figs), 2):
+        if i + 1 < len(activity_figs):
+            # use the resolved labels for the title
+            left_label  = resolved[i][1]
+            right_label = resolved[i+1][1]
+            combined_fig = combine_side_by_side(
+                activity_figs[i],
+                activity_figs[i + 1],
+                title=f"Comparison: {left_label} vs {right_label}"
+            )
+            combined_activity_figs.append(combined_fig)
+        else:
+            combined_activity_figs.append(activity_figs[i])
 
-# Add combined pairs to report
-report_sections.append({
-    "header": "Monthly Activity Levels",
-    "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
-    "figs": combined_activity_figs
-})
-
+    # Add combined pairs to report
+    report_sections.append({
+        "header": "Monthly Activity Levels",
+        "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
+        "figs": combined_activity_figs
+    })
 
 
 
