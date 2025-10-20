@@ -305,29 +305,36 @@ else:
     activity_summary = explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels")
     st.markdown("**AI Summary:** " + activity_summary)
 
-    
-# --- Combine figures pairwise for PDF export ---
-    combined_activity_figs = []
-    for i in range(0, len(activity_figs), 2):
-        if i + 1 < len(activity_figs):
-            # use the resolved labels for the title
-            left_label  = resolved[i][1]
-            right_label = resolved[i+1][1]
-            combined_fig = combine_side_by_side(
-                activity_figs[i],
-                activity_figs[i + 1],
-                title=f"Comparison: {left_label} vs {right_label}"
-            )
-            combined_activity_figs.append(combined_fig)
-        else:
-            combined_activity_figs.append(activity_figs[i])
+def combine_side_by_side(fig1, fig2):
+    """
+    Combine two Matplotlib figures side by side and keep correct datetime scaling.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
-    # Add combined pairs to report
-    report_sections.append({
-        "header": "Monthly Activity Levels",
-        "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
-        "figs": combined_activity_figs
-    })
+    # --- Left chart ---
+    for line in fig1.axes[0].get_lines():
+        x, y = line.get_xdata(), line.get_ydata()
+        axes[0].plot(x, y, label=line.get_label(), linewidth=1.8)
+    axes[0].set_title(fig1.axes[0].get_title())
+    axes[0].set_ylabel(fig1.axes[0].get_ylabel() or "")
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    axes[0].xaxis.set_major_locator(mdates.YearLocator(1))
+    axes[0].grid(True, linestyle="--", alpha=0.6)
+
+    # --- Right chart ---
+    for line in fig2.axes[0].get_lines():
+        x, y = line.get_xdata(), line.get_ydata()
+        axes[1].plot(x, y, label=line.get_label(), linewidth=1.8)
+    axes[1].set_title(fig2.axes[0].get_title())
+    axes[1].set_ylabel(fig2.axes[0].get_ylabel() or "")
+    axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    axes[1].xaxis.set_major_locator(mdates.YearLocator(1))
+    axes[1].grid(True, linestyle="--", alpha=0.6)
+
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    return fig
+
 
 
 
