@@ -21,46 +21,111 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
         'figs': list[plt.Figure | plotly.Figure]
     }
 
-    Returns: bytes of generated PDF (supports Matplotlib + Plotly)
+    Returns: bytes of generated PDF (robust to mixed Matplotlib/Plotly + Unicode text)
     """
+    # --- Helpers ---
+    def ascii_sanitize(s: str) -> str:
+        # Replace common non-latin characters so legacy FPDF (latin-1) won't crash
+        repl = {
+            "–": "-", "—": "-", "−": "-", "’": "'", "‘": "'", "“": '"', "”": '"',
+            "…": "...", "•": "-", "°": " deg", "×": "x", "€": "EUR", "£": "GBP",
+            "→": "->", "←": "<-", "↑": "^", "↓": "v", "±": "+/-",
+            "≤": "<=", "≥": ">=",
+            "🏠": "Home ", "🌍": "Global ", "🇦🇺": "Australia ",
+        }
+        for k, v in repl.items():
+            s = s.replace(k, v)
+        # Strip anything still not latin-1 encodable
+        return s.encode("latin-1", "ignore").decode("latin-1")
+
+    # Try to enable full Unicode with a TTF font if available
+    # Put DejaVuSans.ttf in the same directory as this script to enable unicode
+    unicode_font_available = False
+    font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, report_title, ln=True, align="C")
+
+    try:
+        if os.path.exists(font_path):
+            # fpdf2 supports unicode when you pass uni=True
+            pdf.add_font("DejaVu", "", font_path, uni=True)
+            unicode_font_available = True
+    except Exception:
+        unicode_font_available = False  # fall back silently
+
+    # Title
+    if unicode_font_available:
+        pdf.set_font("DejaVu", "", 16)
+        pdf.cell(0, 10, report_title, ln=True, align="C")
+    else:
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, ascii_sanitize(report_title), ln=True, align="C")
     pdf.ln(10)
 
+    # Sections
     for section in sections:
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, section["header"], ln=True)
-        pdf.set_font("Arial", "", 12)
-        pdf.multi_cell(0, 8, section["text"])
+        header_text = section.get("header", "")
+        body_text = section.get("text", "")
+        figs = section.get("figs", [])
+
+        # Header
+        if unicode_font_available:
+            pdf.set_font("DejaVu", "", 14)
+            pdf.cell(0, 10, header_text, ln=True)
+            pdf.set_font("DejaVu", "", 12)
+            pdf.multi_cell(0, 8, body_text)
+        else:
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, ascii_sanitize(header_text), ln=True)
+            pdf.set_font("Arial", "", 12)
+            pdf.multi_cell(0, 8, ascii_sanitize(body_text))
         pdf.ln(5)
 
-        # ✅ Handle both Matplotlib and Plotly figures safely
-        for fig in section.get("figs", []):
+        # Figures (Matplotlib & Plotly)
+        for fig in figs:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
                 try:
-                    # Matplotlib figure
+                    # Matplotlib
                     fig.savefig(tmpfile.name, bbox_inches="tight")
+                    ok = True
                 except AttributeError:
-                    # Plotly figure (requires Kaleido)
+                    # Plotly (needs kaleido)
                     try:
                         fig.write_image(tmpfile.name, format="png")
+                        ok = True
                     except Exception as e:
-                        pdf.set_font("Arial", "I", 10)
-                        pdf.multi_cell(0, 8, f"(Plotly figure could not be rendered — {e})")
-                        continue
-                pdf.image(tmpfile.name, w=170)
-                os.remove(tmpfile.name)
+                        ok = False
+                        # If figure export fails, write a placeholder line so PDF still completes
+                        if unicode_font_available:
+                            pdf.set_font("DejaVu", "", 10)
+                            pdf.multi_cell(0, 8, f"(Plotly figure could not be rendered — {e})")
+                        else:
+                            pdf.set_font("Arial", "I", 10)
+                            pdf.multi_cell(0, 8, ascii_sanitize(f"(Plotly figure could not be rendered — {e})"))
+
+                if ok:
+                    try:
+                        pdf.image(tmpfile.name, w=170)
+                    except Exception:
+                        # If image embedding fails, write a placeholder line
+                        if unicode_font_available:
+                            pdf.set_font("DejaVu", "", 10)
+                            pdf.multi_cell(0, 8, "(Image could not be embedded)")
+                        else:
+                            pdf.set_font("Arial", "I", 10)
+                            pdf.multi_cell(0, 8, "(Image could not be embedded)")
+                try:
+                    os.remove(tmpfile.name)
+                except Exception:
+                    pass
+
             pdf.ln(10)
 
-    return pdf.output(dest="S").encode("utf-8", errors="ignore")
+    # Important: with legacy FPDF (latin-1 only),
+    # internal pages are encoded as latin-1. We've sanitized text above when unicode font isn't available.
+    return pdf.output(dest="S").encode("latin-1" if not unicode_font_available else "latin-1")
 
-
-
-
-st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
 # ---------- OpenAI client ----------
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
