@@ -7,6 +7,42 @@ from openai import OpenAI
 import yfinance as yf
 import numpy as np
 import plotly.express as px
+pip install fpdf2
+
+from fpdf import FPDF
+import tempfile
+import os
+report_sections = []
+
+def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
+    """
+    sections: list of dicts containing {'header': str, 'text': str, 'fig': plt.Figure | None}
+    Returns: bytes of generated PDF
+    """
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, report_title, ln=True, align="C")
+    pdf.ln(10)
+
+    for section in sections:
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, section["header"], ln=True)
+        pdf.set_font("Arial", "", 12)
+        pdf.multi_cell(0, 8, section["text"])
+        pdf.ln(5)
+
+        # Save and insert figure if available
+        if section.get("fig") is not None:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                section["fig"].savefig(tmpfile.name, bbox_inches="tight")
+                pdf.image(tmpfile.name, w=170)
+                os.remove(tmpfile.name)
+            pdf.ln(10)
+
+    return bytes(pdf.output(dest="S").encode("latin1"))
+
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
 
@@ -113,17 +149,30 @@ activity_map = {
 }
 
 activity_stats = []
+activity_figs = []
+
 codes = [c for c in activity_map if c in h3.columns]
 for i in range(0, len(codes), 2):
     cols = st.columns(2)
     for j, code in enumerate(codes[i:i+2]):
         with cols[j]:
-            st.pyplot(line_fig(h3, code, activity_map[code]))
+            fig = line_fig(h3, code, activity_map[code])
+            st.pyplot(fig)
             change = calc_mom_yoy(h3, code, activity_map[code])
             st.markdown(change)
             activity_stats.append(change)
+            activity_figs.append(fig)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels"))
+activity_summary = explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels")
+st.markdown("**AI Summary:** " + activity_summary)
+
+# Add to report_sections
+report_sections.append({
+    "header": "Monthly Activity Levels",
+    "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
+    "figs": activity_figs
+})
+
 
 # =========================================================
 # 2) Key macro metrics (H1, G1, F1)
@@ -142,93 +191,44 @@ macro_map = {
 }
 
 macro_stats = []
+macro_figs = []
+
 codes = [c for c in macro_map if c]
 for i in range(0, len(codes), 2):
     cols = st.columns(2)
     for j, code in enumerate(codes[i:i+2]):
         df = h1 if code in h1.columns else g1 if code in g1.columns else f1
         with cols[j]:
-            st.pyplot(line_fig(df, code, macro_map[code]))
+            fig = line_fig(df, code, macro_map[code])
+            st.pyplot(fig)
             change = calc_mom_yoy(df, code, macro_map[code])
             st.markdown(change)
             macro_stats.append(change)
+            macro_figs.append(fig)
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics"))
+macro_summary = explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics")
+st.markdown("**AI Summary:** " + macro_summary)
 
-# =========================================================
-# 3) Inflation detail (G2)
-# =========================================================
-st.header("Inflation (CPI components)")
+# Add to report_sections
+report_sections.append({
+    "header": "Key Macro Metrics",
+    "text": "\n".join(macro_stats) + "\n\nAI Summary: " + macro_summary,
+    "figs": macro_figs
+})
 
-g2 = clamp_period(load_rba_table("G2"))
-g2_map = {
-    "GCPIFYP": "Food & non-alcoholic beverages",
-    "GCPIATYP": "Alcohol & tobacco",
-    "GCPICFYP": "Clothing & footwear",
-    "GCPIHOYP": "Housing",
-    "GCPIHCSYP":"Furnishings, hh equipment & services",
-    "GCPIHEYP": "Health",
-    "GCPITYP": "Transport",
-    "GCPICYP": "Communication",
-    "GCPIRYP": "Recreation & culture",
-    "GCPIEYP": "Education",
-    "GCPIFISYP":"Insurance & financial services",
-}
 
-valid_cols = [c for c in g2_map if c in g2.columns]
-g2_nonan = g2.dropna(subset=valid_cols)
+if st.button("📄 Generate Full PDF Report"):
+    pdf_bytes = generate_pdf(
+        f"AU Macro & Markets Dashboard ({start_date} to {end_date})",
+        report_sections
+    )
+    st.download_button(
+        label="⬇️ Download PDF",
+        data=pdf_bytes,
+        file_name=f"AU_Macro_Dashboard_{pd.Timestamp.now().strftime('%Y%m%d')}.pdf",
+        mime="application/pdf"
+    )
 
-inflation_stats = []
-if not g2_nonan.empty:
-    latest = g2_nonan.iloc[-1]
-    date_str = latest["Date"].strftime("%b %Y")
-    values = [float(latest[c]) for c in valid_cols]
-    labels = [g2_map[c] for c in valid_cols]
-
-    # --- One bar chart for all components ---
-    fig, ax = plt.subplots(figsize=(10,6))
-    ax.bar(labels, values)
-    ax.set_title(f"CPI Components (YoY %) — {date_str}")
-    ax.set_ylabel("Percent")
-    ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.grid(axis="y", linestyle="--", alpha=0.6)
-    fig.tight_layout()
-    st.pyplot(fig)
-
-    # Build stats for AI summary
-    for c in valid_cols:
-        inflation_stats.append(calc_mom_yoy(g2, c, g2_map[c]))
-
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(inflation_stats), "Inflation Components"))
-
-# =========================================================
-# 4) Labour market (H5, H4)
-# =========================================================
-st.header("Labour market")
-
-h5 = clamp_period(load_rba_table("H5"))
-h4 = clamp_period(load_rba_table("H4"))
-
-labour_map = {
-    "GLFSURSA": "Unemployment rate",
-    "GWPIYP":   "Year-ended wage growth",
-    "GLFSEPTSYP":"Year-ended employment growth",
-}
-
-labour_stats = []
-codes = [c for c in labour_map if c in (h5.columns.tolist() + h4.columns.tolist())]
-for i in range(0, len(codes), 2):
-    cols = st.columns(2)
-    for j, code in enumerate(codes[i:i+2]):
-        df = h5 if code in h5.columns else h4
-        with cols[j]:
-            st.pyplot(line_fig(df, code, labour_map[code]))
-            change = calc_mom_yoy(df, code, labour_map[code])
-            st.markdown(change)
-            labour_stats.append(change)
-
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(labour_stats), "Labour Market"))
 
 # =========================================================
 # 5) Household finance
@@ -250,18 +250,24 @@ merged["Savings_%_Liabilities"] = (merged["BSPNSHUFAD"] / merged["BSPNSHUL"]) * 
 merged = clamp_period(merged)
 
 finance_stats = []
+finance_figs = []
 
-# Savings
+# ---------- Savings ----------
 st.subheader("Savings")
 cols = st.columns(2)
 if merged["Savings_%_Assets"].notna().any():
-    cols[0].pyplot(line_fig(merged, "Savings_%_Assets", "Household savings as % of assets", "Percent"))
+    fig = line_fig(merged, "Savings_%_Assets", "Household savings as % of assets", "Percent")
+    cols[0].pyplot(fig)
+    finance_figs.append(fig)
     finance_stats.append(calc_mom_yoy(merged, "Savings_%_Assets", "Household savings as % of assets"))
+
 if merged["Savings_%_Liabilities"].notna().any():
-    cols[1].pyplot(line_fig(merged, "Savings_%_Liabilities", "Household savings as % of liabilities", "Percent"))
+    fig = line_fig(merged, "Savings_%_Liabilities", "Household savings as % of liabilities", "Percent")
+    cols[1].pyplot(fig)
+    finance_figs.append(fig)
     finance_stats.append(calc_mom_yoy(merged, "Savings_%_Liabilities", "Household savings as % of liabilities"))
 
-# Debt
+# ---------- Debt ----------
 st.subheader("Debt")
 codes = [("BHFDDIH","Housing debt to income"),("BHFDA","Household debt to assets"),("LPHTSPRI","Loan repayments to income")]
 for i in range(0, len(codes), 2):
@@ -269,10 +275,12 @@ for i in range(0, len(codes), 2):
     for j, (code, label) in enumerate(codes[i:i+2]):
         df = e2 if code in e2.columns else e13
         if code in df.columns:
-            cols[j].pyplot(line_fig(df, code, label))
+            fig = line_fig(df, code, label)
+            cols[j].pyplot(fig)
+            finance_figs.append(fig)
             finance_stats.append(calc_mom_yoy(df, code, label))
 
-# Lending Rates
+# ---------- Lending Rates ----------
 st.subheader("Lending Rates")
 lending_codes = [
     ("FLRHOOTA","Lending rates (all rates)"),
@@ -285,22 +293,39 @@ lending_codes = [
 ]
 for i in range(0, len(lending_codes), 2):
     cols = st.columns(2)
-    for j, (code,label) in enumerate(lending_codes[i:i+2]):
+    for j, (code, label) in enumerate(lending_codes[i:i+2]):
         if code in f6.columns:
-            cols[j].pyplot(line_fig(f6, code, label))
+            fig = line_fig(f6, code, label)
+            cols[j].pyplot(fig)
+            finance_figs.append(fig)
             finance_stats.append(calc_mom_yoy(f6, code, label))
 
-# Credit Growth
+# ---------- Credit Growth ----------
 st.subheader("Credit Growth")
 cols = st.columns(2)
 if "DGFACOHM" in d1.columns:
-    cols[0].pyplot(line_fig(d1, "DGFACOHM", "12-month housing credit growth", "Percent"))
+    fig = line_fig(d1, "DGFACOHM", "12-month housing credit growth", "Percent")
+    cols[0].pyplot(fig)
+    finance_figs.append(fig)
     finance_stats.append(calc_mom_yoy(d1, "DGFACOHM", "12-month housing credit growth"))
+
 if "DGFACBNF12" in d1.columns:
-    cols[1].pyplot(line_fig(d1, "DGFACBNF12", "12-month business credit growth", "Percent"))
+    fig = line_fig(d1, "DGFACBNF12", "12-month business credit growth", "Percent")
+    cols[1].pyplot(fig)
+    finance_figs.append(fig)
     finance_stats.append(calc_mom_yoy(d1, "DGFACBNF12", "12-month business credit growth"))
 
-st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(finance_stats), "Household Finance"))
+# ---------- AI Summary ----------
+finance_summary = explain_with_gpt("\n".join(finance_stats), "Household Finance")
+st.markdown("**AI Summary:** " + finance_summary)
+
+# ---------- Add to PDF export ----------
+report_sections.append({
+    "header": "Household Finance",
+    "text": "\n".join(finance_stats) + "\n\nAI Summary: " + finance_summary,
+    "figs": finance_figs
+})
+
 
 # =========================================================
 # 6) Markets (Yahoo Finance)
@@ -322,27 +347,48 @@ def plot_yf(ticker, title, period="5y", freq="1mo"):
     if len(data) > 13:
         latest, prev, yoy = float(data.iloc[-1]), float(data.iloc[-2]), float(data.iloc[-13])
         if not np.isnan(latest):
-            return f"{title} ({data.index[-1].strftime('%b %Y')}) — MoM: {latest-prev:+.2f}, YoY: {latest-yoy:+.2f}"
-    return f"{title}: insufficient data"
+            return f"{title} ({data.index[-1].strftime('%b %Y')}) — MoM: {latest-prev:+.2f}, YoY: {latest-yoy:+.2f}", fig
+    return f"{title}: insufficient data", fig
 
 
-# FX
+markets_figs = []
+markets_stats = []
+
+# ---------- FX ----------
 st.subheader("Exchange Rates")
 fx_stats = []
 col1, col2 = st.columns(2)
-with col1: fx_stats.append(plot_yf("AUDUSD=X", "AUD/USD (FX rate)"))
-with col2: fx_stats.append(plot_yf("AUDGBP=X", "AUD/GBP (FX rate)"))
-st.markdown("**AI Summary (FX):** " + explain_with_gpt("\n".join(fx_stats), "Exchange Rates"))
+with col1:
+    stat, fig = plot_yf("AUDUSD=X", "AUD/USD (FX rate)")
+    fx_stats.append(stat)
+    markets_figs.append(fig)
+with col2:
+    stat, fig = plot_yf("AUDGBP=X", "AUD/GBP (FX rate)")
+    fx_stats.append(stat)
+    markets_figs.append(fig)
 
-# Equities
+fx_summary = explain_with_gpt("\n".join(fx_stats), "Exchange Rates")
+st.markdown("**AI Summary (FX):** " + fx_summary)
+markets_stats.extend(fx_stats)
+
+# ---------- Equities ----------
 st.subheader("Equity Indices")
 eq_stats = []
 col1, col2 = st.columns(2)
-with col1: eq_stats.append(plot_yf("^AXJO", "ASX200 Index"))
-with col2: eq_stats.append(plot_yf("^GSPC", "S&P500 Index"))
-st.markdown("**AI Summary (Equities):** " + explain_with_gpt("\n".join(eq_stats), "Equity Indices"))
+with col1:
+    stat, fig = plot_yf("^AXJO", "ASX200 Index")
+    eq_stats.append(stat)
+    markets_figs.append(fig)
+with col2:
+    stat, fig = plot_yf("^GSPC", "S&P500 Index")
+    eq_stats.append(stat)
+    markets_figs.append(fig)
 
-# YoY Change side by side
+eq_summary = explain_with_gpt("\n".join(eq_stats), "Equity Indices")
+st.markdown("**AI Summary (Equities):** " + eq_summary)
+markets_stats.extend(eq_stats)
+
+# ---------- YoY Change side-by-side ----------
 st.subheader("YoY Change in Equity Indices")
 yoy_stats = []
 col1, col2 = st.columns(2)
@@ -358,9 +404,10 @@ with col1:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
+    markets_figs.append(fig)
 
     if len(yoy) > 0:
-        latest_val = float(yoy.iloc[-1])  # force to scalar
+        latest_val = float(yoy.iloc[-1])
         if not np.isnan(latest_val):
             yoy_stats.append(f"ASX200 latest YoY change: {latest_val:+.2f}%")
 
@@ -375,20 +422,36 @@ with col2:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
+    markets_figs.append(fig)
 
     if len(yoy) > 0:
-        latest_val = float(yoy.iloc[-1])  # force to scalar
+        latest_val = float(yoy.iloc[-1])
         if not np.isnan(latest_val):
             yoy_stats.append(f"S&P500 latest YoY change: {latest_val:+.2f}%")
 
-st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
+yoy_summary = explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes")
+st.markdown("**AI Summary (YoY Changes):** " + yoy_summary)
+markets_stats.extend(yoy_stats)
 
-st.markdown("**AI Summary (YoY Changes):** " + explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes"))
+# ---------- Add to PDF export ----------
+report_sections.append({
+    "header": "Markets Dashboard (Yahoo Finance)",
+    "text": "\n".join(markets_stats)
+            + "\n\nAI Summary (FX): " + fx_summary
+            + "\n\nAI Summary (Equities): " + eq_summary
+            + "\n\nAI Summary (YoY Changes): " + yoy_summary,
+    "figs": markets_figs
+})
+
 
 # =========================================================
 # 🏠 CoreLogic Daily Home Value Index
 # =========================================================
 st.header("🏠 CoreLogic Daily Home Value Index")
+
+corelogic_figs = []
+corelogic_stats = []
+corelogic_summary = ""
 
 try:
     # Read the Excel file and detect the real header row
@@ -428,28 +491,37 @@ try:
             fig = px.line(df, x="Date", y=available,
                           title="CoreLogic Daily Home Value Index Trends")
             st.plotly_chart(fig, use_container_width=True)
+            corelogic_figs.append(fig)
 
-            yoy_stats = []
             for c in available:
                 if len(df[c].dropna()) > 1:
                     change = (df[c].iloc[-1] / df[c].iloc[0] - 1) * 100
-                    yoy_stats.append(f"{c}: {change:.2f}% change over period")
+                    corelogic_stats.append(f"{c}: {change:.2f}% change over period")
 
-            st.markdown("**AI Summary (CoreLogic):** " +
-                        explain_with_gpt("\n".join(yoy_stats),
-                                         "CoreLogic Home Value Index"))
+            corelogic_summary = explain_with_gpt("\n".join(corelogic_stats),
+                                                 "CoreLogic Home Value Index")
+            st.markdown("**AI Summary (CoreLogic):** " + corelogic_summary)
 
 except Exception as e:
     st.warning(f"Unable to load CoreLogic data: {e}")
 
+# ---------- Add to PDF export ----------
+report_sections.append({
+    "header": "CoreLogic Daily Home Value Index",
+    "text": "\n".join(corelogic_stats) + "\n\nAI Summary: " + corelogic_summary,
+    "figs": corelogic_figs
+})
 
-
-st.caption("Data source: RBA Statistical Tables, Yahoo Finance. Figures computed from public APIs and XLSX files at run-time.")
+st.caption("Data source: RBA Statistical Tables, Yahoo Finance, and CoreLogic. Figures computed from public APIs and XLSX files at run-time.")
 
 # =========================================================
 # 🇦🇺 Australian Population Growth by State
 # =========================================================
-st.header("Australian Net migration by State")
+st.header("🇦🇺 Australian Net Migration by State")
+
+population_figs = []
+population_stats = []
+population_summary = ""
 
 try:
     # Load Excel and find header row containing 'Period'
@@ -486,7 +558,17 @@ try:
         ax.legend(loc="upper left", ncol=2)
         ax.grid(True, linestyle="--", alpha=0.6)
         st.pyplot(fig)
+        population_figs.append(fig)
 
+        # --- Calculate change over period for each state ---
+        for s in states:
+            if df_pop[s].dropna().shape[0] > 1:
+                change = (df_pop[s].iloc[-1] / df_pop[s].iloc[0] - 1) * 100
+                population_stats.append(f"{s}: {change:.2f}% change over period")
+
+        population_summary = explain_with_gpt("\n".join(population_stats),
+                                              "Australian Population by State")
+        st.markdown("**AI Summary (Australia):** " + population_summary)
 
 except Exception as e:
     st.warning(f"Unable to load population data: {e}")
@@ -497,17 +579,18 @@ except Exception as e:
 # =========================================================
 st.header("🌐 Global Total Population Over Time")
 
+global_figs = []
+global_stats = []
+global_summary = ""
+
 try:
     url = "https://api.worldbank.org/v2/country/all/indicator/SP.POP.TOTL?format=json&per_page=20000"
     resp = requests.get(url, timeout=15)
     resp.raise_for_status()
     json_data = resp.json()
-    # The data is in the second element of the JSON (index 1)
+
     records = json_data[1]
-    # Normalize records into a DataFrame
-    df = pd.json_normalize(records)
-    # Keep only “date” and “value”
-    df = df[["date", "value"]].dropna()
+    df = pd.json_normalize(records)[["date", "value"]].dropna()
     df["date"] = pd.to_numeric(df["date"], errors="coerce")
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df = df.sort_values("date")
@@ -520,15 +603,40 @@ try:
     ax.set_ylabel("Population (Billions)")
     ax.grid(True, linestyle="--", alpha=0.6)
     st.pyplot(fig)
+    global_figs.append(fig)
 
     # Latest value text
     latest = df.iloc[-1]
-    st.markdown(f"**Latest world population (year {int(latest['date'])}): {latest['value'] / 1e9:.3f} billion**")
+    latest_text = f"Latest world population (year {int(latest['date'])}): {latest['value'] / 1e9:.3f} billion"
+    st.markdown(f"**{latest_text}**")
+    global_stats.append(latest_text)
+
+    global_summary = explain_with_gpt("\n".join(global_stats), "Global Population Trends")
+    st.markdown("**AI Summary (Global):** " + global_summary)
 
 except Exception as e:
     st.warning(f"Unable to load global population data: {e}")
 
+# ---------- Add to PDF export ----------
+report_sections.append({
+    "header": "Population Trends",
+    "text": "\n".join(population_stats + global_stats)
+            + "\n\nAI Summary (Australia): " + population_summary
+            + "\n\nAI Summary (Global): " + global_summary,
+    "figs": population_figs + global_figs
+})
 
+
+
+
+# =========================================================
+# 🇦🇺 Vanguard Australian Shares Index ETF (VAS.AX)
+# =========================================================
+st.header("🇦🇺 Vanguard Australian Shares Index ETF (VAS.AX) — 5-Year Indexed Performance")
+
+vas_figs = []
+vas_stats = []
+vas_summary = ""
 
 try:
     ticker = "VAS.AX"
@@ -542,6 +650,7 @@ try:
     ax.set_xlabel("Date")
     ax.grid(True, linestyle="--", alpha=0.6)
     st.pyplot(fig)
+    vas_figs.append(fig)
 
     # Summary with explicit float conversion
     change_1y = (
@@ -549,19 +658,33 @@ try:
         if len(data) > 12 else np.nan
     )
     change_5y = (float(data.iloc[-1]) / float(data.iloc[0]) - 1) * 100
-
     perf_text = f"5-Year Change: {change_5y:+.2f}% | 1-Year Change: {change_1y:+.2f}%"
     st.markdown(f"**{perf_text}**")
+
+    vas_stats.append(perf_text)
+    vas_summary = explain_with_gpt("\n".join(vas_stats),
+                                   "Vanguard Australian Shares ETF Performance")
+    st.markdown("**AI Summary:** " + vas_summary)
 
 except Exception as e:
     st.warning(f"Unable to load Vanguard ETF data: {e}")
 
+# Add to report_sections
+report_sections.append({
+    "header": "Vanguard Australian Shares Index ETF (VAS.AX)",
+    "text": "\n".join(vas_stats) + "\n\nAI Summary: " + vas_summary,
+    "figs": vas_figs
+})
 
 
 # =========================================================
-# 🌍 Global Central Bank Policy Rates (from Excel)
+# 🌍 Global Central Bank Policy Rates
 # =========================================================
 st.header("🌍 Global Central Bank Policy Rates")
+
+rates_figs = []
+rates_stats = []
+rates_summary = ""
 
 try:
     # Load and clean
@@ -582,6 +705,7 @@ try:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
+    rates_figs.append(fig)
 
     # --- Summary table ---
     latest = df_rates.iloc[-1]
@@ -600,10 +724,45 @@ try:
 
     # --- AI Summary ---
     lines = [f"{r['Country']}: {r['Latest Rate (%)']:.2f}%" for _, r in summary.iterrows()]
-    st.markdown("**AI Summary:** " + explain_with_gpt("\n".join(lines), "Global Central Bank Policy Rates"))
+    rates_summary = explain_with_gpt("\n".join(lines), "Global Central Bank Policy Rates")
+    st.markdown("**AI Summary:** " + rates_summary)
+    rates_stats.extend(lines)
 
 except Exception as e:
     st.warning(f"Unable to load interest rate data: {e}")
+
+# Add to report_sections
+report_sections.append({
+    "header": "Global Central Bank Policy Rates",
+    "text": "\n".join(rates_stats) + "\n\nAI Summary: " + rates_summary,
+    "figs": rates_figs
+})
+
+def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, report_title, ln=True, align="C")
+    pdf.ln(10)
+
+    for section in sections:
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, section["header"], ln=True)
+        pdf.set_font("Arial", "", 12)
+        pdf.multi_cell(0, 8, section["text"])
+        pdf.ln(5)
+
+        # Handle multiple figures
+        for fig in section.get("figs", []):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                fig.savefig(tmpfile.name, bbox_inches="tight")
+                pdf.image(tmpfile.name, w=170)
+                os.remove(tmpfile.name)
+            pdf.ln(10)
+
+    return bytes(pdf.output(dest="S").encode("latin1"))
+
 
 
 
