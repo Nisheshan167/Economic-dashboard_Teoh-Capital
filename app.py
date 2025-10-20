@@ -669,7 +669,7 @@ aus_pop_stats = []
 aus_pop_summary = ""
 
 try:
-    df_aupop = pd.read_csv("AU-Pop.csv", header=None, names=["Period", "Population"])
+    df_aupop = pd.read_csv("AU_Pop.csv", header=None, names=["Period", "Population"])
     # Convert 'Period' like '5-Mar' to datetime assuming year 2025
     df_aupop["Date"] = pd.to_datetime("2025-" + df_aupop["Period"], format="%Y-%b", errors="coerce")
     df_aupop = df_aupop.dropna(subset=["Date"])
