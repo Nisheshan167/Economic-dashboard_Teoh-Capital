@@ -277,11 +277,24 @@ for i in range(0, len(codes), 2):
 activity_summary = explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels")
 st.markdown("**AI Summary:** " + activity_summary)
 
-# Add to report_sections
+# --- Combine figures pairwise for PDF export ---
+combined_activity_figs = []
+for i in range(0, len(activity_figs), 2):
+    if i + 1 < len(activity_figs):
+        combined_fig = combine_side_by_side(
+            activity_figs[i],
+            activity_figs[i + 1],
+            title=f"Comparison: {activity_map[codes[i]]} vs {activity_map[codes[i + 1]]}"
+        )
+        combined_activity_figs.append(combined_fig)
+    else:
+        combined_activity_figs.append(activity_figs[i])
+
+# Add combined pairs to report
 report_sections.append({
     "header": "Monthly Activity Levels",
     "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
-    "figs": activity_figs
+    "figs": combined_activity_figs
 })
 
 
