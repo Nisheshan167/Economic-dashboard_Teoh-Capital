@@ -334,10 +334,19 @@ macro_summary = explain_with_gpt("\n".join(macro_stats), "Key Macro Metrics")
 st.markdown("**AI Summary:** " + macro_summary)
 
 # Add to report_sections
+combined_macro_figs = []
+for i in range(0, len(macro_figs), 2):
+    if i + 1 < len(macro_figs):
+        combined_macro_figs.append(
+            combine_side_by_side(macro_figs[i], macro_figs[i + 1], title="Key Macro Comparison")
+        )
+    else:
+        combined_macro_figs.append(macro_figs[i])
+
 report_sections.append({
     "header": "Key Macro Metrics",
     "text": "\n".join(macro_stats) + "\n\nAI Summary: " + macro_summary,
-    "figs": macro_figs
+    "figs": combined_macro_figs
 })
 
 # =========================================================
@@ -430,11 +439,21 @@ finance_summary = explain_with_gpt("\n".join(finance_stats), "Household Finance"
 st.markdown("**AI Summary:** " + finance_summary)
 
 # ---------- Add to PDF export ----------
+combined_finance_figs = []
+for i in range(0, len(finance_figs), 2):
+    if i + 1 < len(finance_figs):
+        combined_finance_figs.append(
+            combine_side_by_side(finance_figs[i], finance_figs[i + 1], title="Household Finance Comparison")
+        )
+    else:
+        combined_finance_figs.append(finance_figs[i])
+
 report_sections.append({
     "header": "Household Finance",
     "text": "\n".join(finance_stats) + "\n\nAI Summary: " + finance_summary,
-    "figs": finance_figs
+    "figs": combined_finance_figs
 })
+
 
 
 # =========================================================
@@ -544,13 +563,22 @@ st.markdown("**AI Summary (YoY Changes):** " + yoy_summary)
 markets_stats.extend(yoy_stats)
 
 # ---------- Add to PDF export ----------
+combined_market_figs = []
+for i in range(0, len(markets_figs), 2):
+    if i + 1 < len(markets_figs):
+        combined_market_figs.append(
+            combine_side_by_side(markets_figs[i], markets_figs[i + 1], title="Markets Comparison")
+        )
+    else:
+        combined_market_figs.append(markets_figs[i])
+
 report_sections.append({
     "header": "Markets Dashboard (Yahoo Finance)",
     "text": "\n".join(markets_stats)
             + "\n\nAI Summary (FX): " + fx_summary
             + "\n\nAI Summary (Equities): " + eq_summary
             + "\n\nAI Summary (YoY Changes): " + yoy_summary,
-    "figs": markets_figs
+    "figs": combined_market_figs
 })
 
 
