@@ -15,8 +15,13 @@ report_sections = []
 
 def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     """
-    sections: list of dicts containing {'header': str, 'text': str, 'figs': list[plt.Figure | plotly.Figure]}
-    Returns: bytes of generated PDF
+    sections: list of dicts containing {
+        'header': str,
+        'text': str,
+        'figs': list[plt.Figure | plotly.Figure]
+    }
+
+    Returns: bytes of generated PDF (supports Matplotlib + Plotly)
     """
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -39,8 +44,13 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
                     # Matplotlib figure
                     fig.savefig(tmpfile.name, bbox_inches="tight")
                 except AttributeError:
-                    # Plotly figure
-                    fig.write_image(tmpfile.name, format="png")
+                    # Plotly figure (requires Kaleido)
+                    try:
+                        fig.write_image(tmpfile.name, format="png")
+                    except Exception as e:
+                        pdf.set_font("Arial", "I", 10)
+                        pdf.multi_cell(0, 8, f"(Plotly figure could not be rendered — {e})")
+                        continue
                 pdf.image(tmpfile.name, w=170)
                 os.remove(tmpfile.name)
             pdf.ln(10)
