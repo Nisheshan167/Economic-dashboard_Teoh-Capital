@@ -141,7 +141,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 
-def combine_side_by_side(fig1, fig2, title="Comparison"):
+def combine_side_by_side(fig1, fig2):
     """
     Combine two Matplotlib figures side by side and keep correct datetime scaling.
     """
@@ -306,27 +306,28 @@ else:
     st.markdown("**AI Summary:** " + activity_summary)
 
     # --- Combine figures pairwise for PDF export ---
-    combined_activity_figs = []
-    for i in range(0, len(activity_figs), 2):
-        if i + 1 < len(activity_figs):
-            # use the resolved labels for the title
-            left_label  = resolved[i][1]
-            right_label = resolved[i+1][1]
-            combined_fig = combine_side_by_side(
-                activity_figs[i],
-                activity_figs[i + 1],
-                title=f"Comparison: {left_label} vs {right_label}"
-            )
-            combined_activity_figs.append(combined_fig)
-        else:
-            combined_activity_figs.append(activity_figs[i])
+combined_activity_figs = []
+for i in range(0, len(activity_figs), 2):
+    if i + 1 < len(activity_figs):
+        # use the resolved labels for the title
+        left_label  = resolved[i][1]
+        right_label = resolved[i + 1][1]
+        combined_fig = combine_side_by_side(
+            activity_figs[i],
+            activity_figs[i + 1],
+            title=f"{left_label} vs {right_label}"
+        )
+        combined_activity_figs.append(combined_fig)
+    else:
+        combined_activity_figs.append(activity_figs[i])
 
-    # Add combined pairs to report
-    report_sections.append({
-        "header": "Monthly Activity Levels",
-        "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
-        "figs": combined_activity_figs
-    })
+# Add combined pairs to report
+report_sections.append({
+    "header": "Monthly Activity Levels",
+    "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
+    "figs": combined_activity_figs
+})
+
 
 
 
@@ -370,7 +371,7 @@ combined_macro_figs = []
 for i in range(0, len(macro_figs), 2):
     if i + 1 < len(macro_figs):
         combined_macro_figs.append(
-            combine_side_by_side(macro_figs[i], macro_figs[i + 1], title="Key Macro Comparison")
+            combine_side_by_side(macro_figs[i], macro_figs[i + 1])
         )
     else:
         combined_macro_figs.append(macro_figs[i])
