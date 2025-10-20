@@ -125,6 +125,36 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     # Important: with legacy FPDF (latin-1 only),
     # internal pages are encoded as latin-1. We've sanitized text above when unicode font isn't available.
     return pdf.output(dest="S").encode("latin-1" if not unicode_font_available else "latin-1")
+import matplotlib.pyplot as plt
+
+def combine_side_by_side(fig1, fig2, title="Comparison"):
+    """
+    Merge two Matplotlib figures side-by-side into one figure.
+    Works best for line charts with similar axes.
+    """
+    # Create a new side-by-side figure
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+
+    # Copy the first figure’s lines to the left axis
+    for line in fig1.axes[0].get_lines():
+        axes[0].plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
+    axes[0].set_title(fig1.axes[0].get_title())
+    axes[0].grid(True)
+    if fig1.axes[0].get_ylabel():
+        axes[0].set_ylabel(fig1.axes[0].get_ylabel())
+
+    # Copy the second figure’s lines to the right axis
+    for line in fig2.axes[0].get_lines():
+        axes[1].plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
+    axes[1].set_title(fig2.axes[0].get_title())
+    axes[1].grid(True)
+    if fig2.axes[0].get_ylabel():
+        axes[1].set_ylabel(fig2.axes[0].get_ylabel())
+
+    # Global title and layout
+    fig.suptitle(title)
+    fig.tight_layout()
+    return fig
 
 
 # ---------- OpenAI client ----------
