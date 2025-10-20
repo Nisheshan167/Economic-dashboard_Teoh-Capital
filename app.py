@@ -314,8 +314,7 @@ for i in range(0, len(activity_figs), 2):
         right_label = resolved[i + 1][1]
         combined_fig = combine_side_by_side(
             activity_figs[i],
-            activity_figs[i + 1],
-            title=f"{left_label} vs {right_label}"
+            activity_figs[i + 1]
         )
         combined_activity_figs.append(combined_fig)
     else:
