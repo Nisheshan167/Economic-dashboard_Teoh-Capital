@@ -16,7 +16,6 @@ report_sections = []
 def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     """
     sections: list of dicts containing {'header': str, 'text': str, 'figs': list[plt.Figure]}
-
     Returns: bytes of generated PDF
     """
     pdf = FPDF()
@@ -34,14 +33,15 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
         pdf.ln(5)
 
         # Save and insert figures if available
-for fig in section.get("figs", []):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-        fig.savefig(tmpfile.name, bbox_inches="tight")
-        pdf.image(tmpfile.name, w=170)
-        os.remove(tmpfile.name)
-    pdf.ln(10)
+        for fig in section.get("figs", []):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                fig.savefig(tmpfile.name, bbox_inches="tight")
+                pdf.image(tmpfile.name, w=170)
+                os.remove(tmpfile.name)
+            pdf.ln(10)
 
     return bytes(pdf.output(dest="S").encode("latin1"))
+
 
 
 st.set_page_config(page_title="AU Macro & Markets Dashboard", layout="wide")
