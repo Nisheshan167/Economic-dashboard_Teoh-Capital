@@ -11,3 +11,4 @@ openpyxl
 setuptools
 pandas_datareader
 fpdf==1.7.2
+pip install -U kaleido
