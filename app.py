@@ -512,7 +512,7 @@ def plot_yf(ticker, title, period="5y", freq="1mo"):
     ax.grid(True)
     st.pyplot(fig)
 
-    # Ensure we only work with scalar floats
+    # Return formatted summary + figure
     if len(data) > 13:
         latest, prev, yoy = float(data.iloc[-1]), float(data.iloc[-2]), float(data.iloc[-13])
         if not np.isnan(latest):
@@ -556,6 +556,29 @@ with col2:
 eq_summary = explain_with_gpt("\n".join(eq_stats), "Equity Indices")
 st.markdown("**AI Summary (Equities):** " + eq_summary)
 markets_stats.extend(eq_stats)
+
+# ---------- Combine Summaries ----------
+markets_summary = (
+    "**AI Summary (FX):** " + fx_summary + "\n\n" +
+    "**AI Summary (Equities):** " + eq_summary
+)
+
+# ---------- Add to PDF Export ----------
+combined_markets_figs = []
+for i in range(0, len(markets_figs), 2):
+    if i + 1 < len(markets_figs):
+        combined_markets_figs.append(
+            combine_side_by_side(markets_figs[i], markets_figs[i + 1])
+        )
+    else:
+        combined_markets_figs.append(markets_figs[i])
+
+report_sections.append({
+    "header": "Markets Dashboard (Yahoo Finance)",
+    "text": "\n".join(markets_stats) + "\n\n" + markets_summary,
+    "figs": combined_markets_figs
+})
+
 
 
 # =========================================================
