@@ -7,7 +7,6 @@ from openai import OpenAI
 import yfinance as yf
 import numpy as np
 import plotly.express as px
-pip install fpdf2
 
 from fpdf import FPDF
 import tempfile
@@ -215,20 +214,6 @@ report_sections.append({
     "text": "\n".join(macro_stats) + "\n\nAI Summary: " + macro_summary,
     "figs": macro_figs
 })
-
-
-if st.button("📄 Generate Full PDF Report"):
-    pdf_bytes = generate_pdf(
-        f"AU Macro & Markets Dashboard ({start_date} to {end_date})",
-        report_sections
-    )
-    st.download_button(
-        label="⬇️ Download PDF",
-        data=pdf_bytes,
-        file_name=f"AU_Macro_Dashboard_{pd.Timestamp.now().strftime('%Y%m%d')}.pdf",
-        mime="application/pdf"
-    )
-
 
 # =========================================================
 # 5) Household finance
