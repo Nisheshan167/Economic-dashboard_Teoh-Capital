@@ -669,13 +669,14 @@ aus_pop_stats = []
 aus_pop_summary = ""
 
 try:
-    df_aupop = pd.read_csv("AU_Pop.csv", header=None, names=["Period", "Population"])
-    # Convert 'Period' like '5-Mar' to datetime assuming year 2025
+    # Load AU population growth CSV
+    df_aupop = pd.read_csv("AU-Pop.csv", header=None, names=["Period", "Population"])
+    # Convert 'Period' (e.g., 5-Mar) to datetime, assuming 2025 as year
     df_aupop["Date"] = pd.to_datetime("2025-" + df_aupop["Period"], format="%Y-%b", errors="coerce")
     df_aupop = df_aupop.dropna(subset=["Date"])
 
     # --- Plot ---
-    fig, ax = plt.subplots(figsize=(10,5))
+    fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(df_aupop["Date"], df_aupop["Population"], color="tab:blue", linewidth=2)
     ax.set_title("Australian Population Growth (2025)")
     ax.set_xlabel("Month")
@@ -684,13 +685,15 @@ try:
     st.pyplot(fig)
     aus_pop_figs.append(fig)
 
-    # --- Stats ---
+    # --- Calculate stats ---
     if len(df_aupop) > 1:
         start_val = df_aupop["Population"].iloc[0]
         end_val = df_aupop["Population"].iloc[-1]
-        change = (end_val - start_val)
-        aus_pop_stats.append(f"Population growth increased from {start_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[0]} "
-                             f"to {end_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[-1]} ({change:+.2f} ppts change).")
+        change = end_val - start_val
+        aus_pop_stats.append(
+            f"Population growth increased from {start_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[0]} "
+            f"to {end_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[-1]} ({change:+.2f} ppts change)."
+        )
 
     aus_pop_summary = explain_with_gpt("\n".join(aus_pop_stats), "Australian Population Growth")
     st.markdown("**AI Summary (Population):** " + aus_pop_summary)
@@ -698,7 +701,7 @@ try:
 except Exception as e:
     st.warning(f"Unable to load Australian population data: {e}")
 
-# Add to PDF
+# Add to PDF report
 report_sections.append({
     "header": "Australian Population Growth",
     "text": "\n".join(aus_pop_stats) + "\n\nAI Summary: " + aus_pop_summary,
@@ -725,22 +728,23 @@ try:
             break
 
     if header_row is None:
-        st.error(f"Could not find header row with 'Period'. Rows detected: {len(df_raw)}")
+        st.error("Could not find header row containing 'Period'.")
     else:
+        # Re-read with proper header row
         df_mig = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet", header=header_row)
         df_mig.columns = df_mig.columns.astype(str).str.strip()
 
-        # Rename & clean
+        # Rename and clean Period column
         period_col = next((c for c in df_mig.columns if "period" in c.lower()), None)
         df_mig = df_mig.rename(columns={period_col: "Period"})
         df_mig["Period"] = pd.to_datetime(df_mig["Period"], errors="coerce", format="%Y")
         df_mig = df_mig.dropna(subset=["Period"])
 
-        # Select remaining columns as states
+        # Get state columns
         states = [c for c in df_mig.columns if c != "Period"]
 
-        # --- Plot migration trends ---
-        fig, ax = plt.subplots(figsize=(10,5))
+        # --- Plot ---
+        fig, ax = plt.subplots(figsize=(10, 5))
         for s in states:
             ax.plot(df_mig["Period"], df_mig[s], label=s)
         ax.set_title("Net Migration by State (ABS)")
@@ -751,25 +755,25 @@ try:
         st.pyplot(fig)
         migration_figs.append(fig)
 
-        # --- Change over period ---
+        # --- Calculate change over period ---
         for s in states:
             if df_mig[s].dropna().shape[0] > 1:
                 change = (df_mig[s].iloc[-1] / df_mig[s].iloc[0] - 1) * 100
                 migration_stats.append(f"{s}: {change:.2f}% change over period")
 
-        migration_summary = explain_with_gpt("\n".join(migration_stats),
-                                             "Net Migration by State")
+        migration_summary = explain_with_gpt("\n".join(migration_stats), "Net Migration by State")
         st.markdown("**AI Summary (Migration):** " + migration_summary)
 
 except Exception as e:
     st.warning(f"Unable to load migration data: {e}")
 
-# Add to PDF
+# Add to PDF report
 report_sections.append({
     "header": "Net Migration by State",
     "text": "\n".join(migration_stats) + "\n\nAI Summary: " + migration_summary,
     "figs": migration_figs
 })
+
 
 
 # =========================================================
