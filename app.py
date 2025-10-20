@@ -15,7 +15,8 @@ report_sections = []
 
 def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     """
-    sections: list of dicts containing {'header': str, 'text': str, 'fig': plt.Figure | None}
+    sections: list of dicts containing {'header': str, 'text': str, 'figs': list[plt.Figure]}
+
     Returns: bytes of generated PDF
     """
     pdf = FPDF()
@@ -32,13 +33,13 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
         pdf.multi_cell(0, 8, section["text"])
         pdf.ln(5)
 
-        # Save and insert figure if available
-        if section.get("fig") is not None:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-                section["fig"].savefig(tmpfile.name, bbox_inches="tight")
-                pdf.image(tmpfile.name, w=170)
-                os.remove(tmpfile.name)
-            pdf.ln(10)
+        # Save and insert figures if available
+for fig in section.get("figs", []):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+        fig.savefig(tmpfile.name, bbox_inches="tight")
+        pdf.image(tmpfile.name, w=170)
+        os.remove(tmpfile.name)
+    pdf.ln(10)
 
     return bytes(pdf.output(dest="S").encode("latin1"))
 
@@ -723,30 +724,21 @@ report_sections.append({
     "figs": rates_figs
 })
 
-def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, report_title, ln=True, align="C")
-    pdf.ln(10)
+# =========================================================
+# 📄 Generate Full PDF Report
+# =========================================================
+if st.button("📄 Generate Full PDF Report"):
+    pdf_bytes = generate_pdf(
+        f"AU Macro & Markets Dashboard ({start_date} to {end_date})",
+        report_sections
+    )
+    st.download_button(
+        label="⬇️ Download PDF",
+        data=pdf_bytes,
+        file_name=f"AU_Macro_Dashboard_{pd.Timestamp.now().strftime('%Y%m%d')}.pdf",
+        mime="application/pdf"
+    )
 
-    for section in sections:
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, section["header"], ln=True)
-        pdf.set_font("Arial", "", 12)
-        pdf.multi_cell(0, 8, section["text"])
-        pdf.ln(5)
-
-        # Handle multiple figures
-        for fig in section.get("figs", []):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-                fig.savefig(tmpfile.name, bbox_inches="tight")
-                pdf.image(tmpfile.name, w=170)
-                os.remove(tmpfile.name)
-            pdf.ln(10)
-
-    return bytes(pdf.output(dest="S").encode("latin1"))
 
 
 
