@@ -34,11 +34,17 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
 
         # Save and insert figures if available
         for fig in section.get("figs", []):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-                fig.savefig(tmpfile.name, bbox_inches="tight")
-                pdf.image(tmpfile.name, w=170)
-                os.remove(tmpfile.name)
-            pdf.ln(10)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+        try:
+            # Matplotlib figure
+            fig.savefig(tmpfile.name, bbox_inches="tight")
+        except AttributeError:
+            # Plotly figure
+            fig.write_image(tmpfile.name, format="png")
+        pdf.image(tmpfile.name, w=170)
+        os.remove(tmpfile.name)
+    pdf.ln(10)
+
 
     return bytes(pdf.output(dest="S").encode("latin1"))
 
