@@ -155,32 +155,37 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     return pdf.output(dest="S").encode("latin-1" if not unicode_font_available else "latin-1")
 import matplotlib.pyplot as plt
 
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+
 def combine_side_by_side(fig1, fig2, title="Comparison"):
     """
-    Merge two Matplotlib figures side-by-side into one figure.
-    Works best for line charts with similar axes.
+    Combine two Matplotlib figures side by side and keep correct datetime scaling.
     """
-    # Create a new side-by-side figure
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
-    # Copy the first figure’s lines to the left axis
+    # --- Left chart ---
     for line in fig1.axes[0].get_lines():
-        axes[0].plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
+        x, y = line.get_xdata(), line.get_ydata()
+        axes[0].plot(x, y, label=line.get_label(), linewidth=1.8)
     axes[0].set_title(fig1.axes[0].get_title())
-    axes[0].grid(True)
-    if fig1.axes[0].get_ylabel():
-        axes[0].set_ylabel(fig1.axes[0].get_ylabel())
+    axes[0].set_ylabel(fig1.axes[0].get_ylabel() or "")
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    axes[0].xaxis.set_major_locator(mdates.YearLocator(1))
+    axes[0].grid(True, linestyle="--", alpha=0.6)
 
-    # Copy the second figure’s lines to the right axis
+    # --- Right chart ---
     for line in fig2.axes[0].get_lines():
-        axes[1].plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
+        x, y = line.get_xdata(), line.get_ydata()
+        axes[1].plot(x, y, label=line.get_label(), linewidth=1.8)
     axes[1].set_title(fig2.axes[0].get_title())
-    axes[1].grid(True)
-    if fig2.axes[0].get_ylabel():
-        axes[1].set_ylabel(fig2.axes[0].get_ylabel())
+    axes[1].set_ylabel(fig2.axes[0].get_ylabel() or "")
+    axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    axes[1].xaxis.set_major_locator(mdates.YearLocator(1))
+    axes[1].grid(True, linestyle="--", alpha=0.6)
 
-    # Global title and layout
-    fig.suptitle(title)
+    fig.suptitle(title, fontsize=12)
+    fig.autofmt_xdate()
     fig.tight_layout()
     return fig
 
