@@ -84,10 +84,10 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
 
     # Title
     if unicode_font_available:
-        pdf.set_font("DejaVu", "", 16)
+        pdf.set_font("DejaVu", "", 12)
         pdf.cell(0, 10, report_title, ln=True, align="C")
     else:
-        pdf.set_font("Arial", "B", 16)
+        pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, ascii_sanitize(report_title), ln=True, align="C")
     pdf.ln(10)
 
