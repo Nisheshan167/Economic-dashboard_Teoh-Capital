@@ -660,13 +660,60 @@ report_sections.append({
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance, and CoreLogic. Figures computed from public APIs and XLSX files at run-time.")
 
 # =========================================================
-# 🇦🇺 Australian Population Growth by State
+# 🇦🇺 Australian Population Growth
 # =========================================================
-st.header("🇦🇺 Australian Net Migration by State")
+st.header("🇦🇺 Australian Population Growth")
 
-population_figs = []
-population_stats = []
-population_summary = ""
+aus_pop_figs = []
+aus_pop_stats = []
+aus_pop_summary = ""
+
+try:
+    df_aupop = pd.read_csv("AU-Pop.csv", header=None, names=["Period", "Population"])
+    # Convert 'Period' like '5-Mar' to datetime assuming year 2025
+    df_aupop["Date"] = pd.to_datetime("2025-" + df_aupop["Period"], format="%Y-%b", errors="coerce")
+    df_aupop = df_aupop.dropna(subset=["Date"])
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(10,5))
+    ax.plot(df_aupop["Date"], df_aupop["Population"], color="tab:blue", linewidth=2)
+    ax.set_title("Australian Population Growth (2025)")
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Population Growth (%)")
+    ax.grid(True, linestyle="--", alpha=0.6)
+    st.pyplot(fig)
+    aus_pop_figs.append(fig)
+
+    # --- Stats ---
+    if len(df_aupop) > 1:
+        start_val = df_aupop["Population"].iloc[0]
+        end_val = df_aupop["Population"].iloc[-1]
+        change = (end_val - start_val)
+        aus_pop_stats.append(f"Population growth increased from {start_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[0]} "
+                             f"to {end_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[-1]} ({change:+.2f} ppts change).")
+
+    aus_pop_summary = explain_with_gpt("\n".join(aus_pop_stats), "Australian Population Growth")
+    st.markdown("**AI Summary (Population):** " + aus_pop_summary)
+
+except Exception as e:
+    st.warning(f"Unable to load Australian population data: {e}")
+
+# Add to PDF
+report_sections.append({
+    "header": "Australian Population Growth",
+    "text": "\n".join(aus_pop_stats) + "\n\nAI Summary: " + aus_pop_summary,
+    "figs": aus_pop_figs
+})
+
+
+# =========================================================
+# 🧳 Net Migration by State
+# =========================================================
+st.header("🧳 Net Migration by State")
+
+migration_figs = []
+migration_stats = []
+migration_summary = ""
 
 try:
     # Load Excel and find header row containing 'Period'
@@ -680,43 +727,49 @@ try:
     if header_row is None:
         st.error(f"Could not find header row with 'Period'. Rows detected: {len(df_raw)}")
     else:
-        # Re-read with correct header row
-        df_pop = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet", header=header_row)
-        df_pop.columns = df_pop.columns.astype(str).str.strip()
+        df_mig = pd.read_excel("Population.xlsx", sheet_name="New.WorkingSheet", header=header_row)
+        df_mig.columns = df_mig.columns.astype(str).str.strip()
 
         # Rename & clean
-        period_col = next((c for c in df_pop.columns if "period" in c.lower()), None)
-        df_pop = df_pop.rename(columns={period_col: "Period"})
-        df_pop["Period"] = pd.to_datetime(df_pop["Period"], errors="coerce", format="%Y")
-        df_pop = df_pop.dropna(subset=["Period"])
+        period_col = next((c for c in df_mig.columns if "period" in c.lower()), None)
+        df_mig = df_mig.rename(columns={period_col: "Period"})
+        df_mig["Period"] = pd.to_datetime(df_mig["Period"], errors="coerce", format="%Y")
+        df_mig = df_mig.dropna(subset=["Period"])
 
         # Select remaining columns as states
-        states = [c for c in df_pop.columns if c != "Period"]
+        states = [c for c in df_mig.columns if c != "Period"]
 
-        # --- Plot population trends ---
+        # --- Plot migration trends ---
         fig, ax = plt.subplots(figsize=(10,5))
         for s in states:
-            ax.plot(df_pop["Period"], df_pop[s], label=s)
-        ax.set_title("Population by State (ABS)")
+            ax.plot(df_mig["Period"], df_mig[s], label=s)
+        ax.set_title("Net Migration by State (ABS)")
         ax.set_xlabel("Year")
-        ax.set_ylabel("Population ('000s)")
+        ax.set_ylabel("Net Migration ('000s)")
         ax.legend(loc="upper left", ncol=2)
         ax.grid(True, linestyle="--", alpha=0.6)
         st.pyplot(fig)
-        population_figs.append(fig)
+        migration_figs.append(fig)
 
-        # --- Calculate change over period for each state ---
+        # --- Change over period ---
         for s in states:
-            if df_pop[s].dropna().shape[0] > 1:
-                change = (df_pop[s].iloc[-1] / df_pop[s].iloc[0] - 1) * 100
-                population_stats.append(f"{s}: {change:.2f}% change over period")
+            if df_mig[s].dropna().shape[0] > 1:
+                change = (df_mig[s].iloc[-1] / df_mig[s].iloc[0] - 1) * 100
+                migration_stats.append(f"{s}: {change:.2f}% change over period")
 
-        population_summary = explain_with_gpt("\n".join(population_stats),
-                                              "Australian Population by State")
-        st.markdown("**AI Summary (Australia):** " + population_summary)
+        migration_summary = explain_with_gpt("\n".join(migration_stats),
+                                             "Net Migration by State")
+        st.markdown("**AI Summary (Migration):** " + migration_summary)
 
 except Exception as e:
-    st.warning(f"Unable to load population data: {e}")
+    st.warning(f"Unable to load migration data: {e}")
+
+# Add to PDF
+report_sections.append({
+    "header": "Net Migration by State",
+    "text": "\n".join(migration_stats) + "\n\nAI Summary: " + migration_summary,
+    "figs": migration_figs
+})
 
 
 # =========================================================
