@@ -475,7 +475,7 @@ combined_finance_figs = []
 for i in range(0, len(finance_figs), 2):
     if i + 1 < len(finance_figs):
         combined_finance_figs.append(
-            combine_side_by_side(finance_figs[i], finance_figs[i + 1], title="Household Finance Comparison")
+            combine_side_by_side(finance_figs[i], finance_figs[i + 1])
         )
     else:
         combined_finance_figs.append(finance_figs[i])
@@ -548,70 +548,6 @@ with col2:
 eq_summary = explain_with_gpt("\n".join(eq_stats), "Equity Indices")
 st.markdown("**AI Summary (Equities):** " + eq_summary)
 markets_stats.extend(eq_stats)
-
-# ---------- YoY Change side-by-side ----------
-st.subheader("YoY Change in Equity Indices")
-yoy_stats = []
-col1, col2 = st.columns(2)
-
-with col1:
-    data = yf.download("^AXJO", period="5y", interval="1mo")["Close"].dropna()
-    yoy = data.pct_change(periods=12) * 100
-    fig, ax = plt.subplots(figsize=(7,4))
-    ax.plot(yoy.index, yoy, label="ASX200 YoY Change (%)")
-    ax.set_title("ASX200 YoY Change")
-    ax.axhline(0, color="gray", linestyle="--")
-    ax.set_ylabel("%")
-    ax.legend()
-    ax.grid(True)
-    st.pyplot(fig)
-    markets_figs.append(fig)
-
-    if len(yoy) > 0:
-        latest_val = float(yoy.iloc[-1])
-        if not np.isnan(latest_val):
-            yoy_stats.append(f"ASX200 latest YoY change: {latest_val:+.2f}%")
-
-with col2:
-    data = yf.download("^GSPC", period="5y", interval="1mo")["Close"].dropna()
-    yoy = data.pct_change(periods=12) * 100
-    fig, ax = plt.subplots(figsize=(7,4))
-    ax.plot(yoy.index, yoy, label="S&P500 YoY Change (%)")
-    ax.set_title("S&P500 YoY Change")
-    ax.axhline(0, color="gray", linestyle="--")
-    ax.set_ylabel("%")
-    ax.legend()
-    ax.grid(True)
-    st.pyplot(fig)
-    markets_figs.append(fig)
-
-    if len(yoy) > 0:
-        latest_val = float(yoy.iloc[-1])
-        if not np.isnan(latest_val):
-            yoy_stats.append(f"S&P500 latest YoY change: {latest_val:+.2f}%")
-
-yoy_summary = explain_with_gpt("\n".join(yoy_stats), "YoY Index Changes")
-st.markdown("**AI Summary (YoY Changes):** " + yoy_summary)
-markets_stats.extend(yoy_stats)
-
-# ---------- Add to PDF export ----------
-combined_market_figs = []
-for i in range(0, len(markets_figs), 2):
-    if i + 1 < len(markets_figs):
-        combined_market_figs.append(
-            combine_side_by_side(markets_figs[i], markets_figs[i + 1], title="Markets Comparison")
-        )
-    else:
-        combined_market_figs.append(markets_figs[i])
-
-report_sections.append({
-    "header": "Markets Dashboard (Yahoo Finance)",
-    "text": "\n".join(markets_stats)
-            + "\n\nAI Summary (FX): " + fx_summary
-            + "\n\nAI Summary (Equities): " + eq_summary
-            + "\n\nAI Summary (YoY Changes): " + yoy_summary,
-    "figs": combined_market_figs
-})
 
 
 # =========================================================
