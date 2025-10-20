@@ -13,6 +13,34 @@ import tempfile
 import os
 report_sections = []
 
+def plotly_to_matplotlib(fig_px):
+    """Convert a simple Plotly line figure to Matplotlib (for PDF export without Kaleido)."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    for trace in fig_px.data:
+        # Some traces might not be lines or may lack a name
+        x = getattr(trace, "x", None)
+        y = getattr(trace, "y", None)
+        if x is None or y is None:
+            continue
+        name = getattr(trace, "name", None) or ""
+        ax.plot(x, y, label=name if name is not None else "")
+
+    title = getattr(fig_px.layout, "title", None)
+    if title and getattr(title, "text", None):
+        ax.set_title(title.text)
+
+    # Only show legend if we actually added labels
+    handles, labels = ax.get_legend_handles_labels()
+    if any(lbl for lbl in labels):
+        ax.legend()
+
+    ax.grid(True)
+    fig.tight_layout()
+    return fig
+
+
 def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     """
     sections: list of dicts containing {
@@ -251,6 +279,8 @@ st.title("Australia Macro Dashboard")
 st.header("Monthly activity levels")
 
 h3 = clamp_period(load_rba_table("H3"))
+
+# keys are the canonical “codes”, values are the human labels
 activity_map = {
     "GISSRTCYP": "Year-ended retail sales growth",
     "GISPSDA":   "Private dwelling approvals",
@@ -262,40 +292,54 @@ activity_map = {
 activity_stats = []
 activity_figs = []
 
-codes = [c for c in activity_map if c in h3.columns]
-for i in range(0, len(codes), 2):
-    cols = st.columns(2)
-    for j, code in enumerate(codes[i:i+2]):
-        with cols[j]:
-            fig = line_fig(h3, code, activity_map[code])
-            st.pyplot(fig)
-            change = calc_mom_yoy(h3, code, activity_map[code])
-            st.markdown(change)
-            activity_stats.append(change)
-            activity_figs.append(fig)
+# Build a resolved list of (actual_column_name, label) using fuzzy matching
+resolved = []
+for key, label in activity_map.items():
+    match = next((col for col in h3.columns if key.lower() in str(col).lower()), None)
+    if match:
+        resolved.append((match, label))
 
-activity_summary = explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels")
-st.markdown("**AI Summary:** " + activity_summary)
+if not resolved:
+    st.warning("No matching H3 columns were found in the downloaded table.")
+else:
+    # Show charts in a 2-column grid
+    for i in range(0, len(resolved), 2):
+        cols = st.columns(2)
+        for j, (colname, label) in enumerate(resolved[i:i+2]):
+            with cols[j]:
+                fig = line_fig(h3, colname, label)
+                st.pyplot(fig)
+                change = calc_mom_yoy(h3, colname, label)
+                st.markdown(change)
+                activity_stats.append(change)
+                activity_figs.append(fig)
 
-# --- Combine figures pairwise for PDF export ---
-combined_activity_figs = []
-for i in range(0, len(activity_figs), 2):
-    if i + 1 < len(activity_figs):
-        combined_fig = combine_side_by_side(
-            activity_figs[i],
-            activity_figs[i + 1],
-            title=f"Comparison: {activity_map[codes[i]]} vs {activity_map[codes[i + 1]]}"
-        )
-        combined_activity_figs.append(combined_fig)
-    else:
-        combined_activity_figs.append(activity_figs[i])
+    activity_summary = explain_with_gpt("\n".join(activity_stats), "Monthly Activity Levels")
+    st.markdown("**AI Summary:** " + activity_summary)
 
-# Add combined pairs to report
-report_sections.append({
-    "header": "Monthly Activity Levels",
-    "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
-    "figs": combined_activity_figs
-})
+    # --- Combine figures pairwise for PDF export ---
+    combined_activity_figs = []
+    for i in range(0, len(activity_figs), 2):
+        if i + 1 < len(activity_figs):
+            # use the resolved labels for the title
+            left_label  = resolved[i][1]
+            right_label = resolved[i+1][1]
+            combined_fig = combine_side_by_side(
+                activity_figs[i],
+                activity_figs[i + 1],
+                title=f"Comparison: {left_label} vs {right_label}"
+            )
+            combined_activity_figs.append(combined_fig)
+        else:
+            combined_activity_figs.append(activity_figs[i])
+
+    # Add combined pairs to report
+    report_sections.append({
+        "header": "Monthly Activity Levels",
+        "text": "\n".join(activity_stats) + "\n\nAI Summary: " + activity_summary,
+        "figs": combined_activity_figs
+    })
+
 
 
 # =========================================================
@@ -644,11 +688,19 @@ except Exception as e:
     st.warning(f"Unable to load CoreLogic data: {e}")
 
 # ---------- Add to PDF export ----------
+converted_corelogic_figs = []
+for f in corelogic_figs:
+    try:
+        converted_corelogic_figs.append(plotly_to_matplotlib(f))
+    except Exception:
+        pass
+
 report_sections.append({
     "header": "CoreLogic Daily Home Value Index",
     "text": "\n".join(corelogic_stats) + "\n\nAI Summary: " + corelogic_summary,
-    "figs": corelogic_figs
+    "figs": converted_corelogic_figs
 })
+
 
 st.caption("Data source: RBA Statistical Tables, Yahoo Finance, and CoreLogic. Figures computed from public APIs and XLSX files at run-time.")
 
