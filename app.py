@@ -15,7 +15,7 @@ report_sections = []
 
 def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
     """
-    sections: list of dicts containing {'header': str, 'text': str, 'figs': list[plt.Figure]}
+    sections: list of dicts containing {'header': str, 'text': str, 'figs': list[plt.Figure | plotly.Figure]}
     Returns: bytes of generated PDF
     """
     pdf = FPDF()
@@ -32,19 +32,18 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
         pdf.multi_cell(0, 8, section["text"])
         pdf.ln(5)
 
-        # Save and insert figures if available
+        # ✅ Handle both Matplotlib and Plotly figures safely
         for fig in section.get("figs", []):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-        try:
-            # Matplotlib figure
-            fig.savefig(tmpfile.name, bbox_inches="tight")
-        except AttributeError:
-            # Plotly figure
-            fig.write_image(tmpfile.name, format="png")
-        pdf.image(tmpfile.name, w=170)
-        os.remove(tmpfile.name)
-    pdf.ln(10)
-
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                try:
+                    # Matplotlib figure
+                    fig.savefig(tmpfile.name, bbox_inches="tight")
+                except AttributeError:
+                    # Plotly figure
+                    fig.write_image(tmpfile.name, format="png")
+                pdf.image(tmpfile.name, w=170)
+                os.remove(tmpfile.name)
+            pdf.ln(10)
 
     return bytes(pdf.output(dest="S").encode("latin1"))
 
