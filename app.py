@@ -55,7 +55,8 @@ def generate_pdf(report_title: str, sections: list[dict]) -> bytes:
                 os.remove(tmpfile.name)
             pdf.ln(10)
 
-    return bytes(pdf.output(dest="S").encode("latin1"))
+    return pdf.output(dest="S").encode("utf-8", errors="ignore")
+
 
 
 
