@@ -780,6 +780,11 @@ report_sections.append({
 # =========================================================
 st.header("🌐 Global Total Population Over Time")
 
+# --- Initialize all population-related lists to avoid NameErrors ---
+population_figs = []
+population_stats = []
+population_summary = ""
+
 global_figs = []
 global_stats = []
 global_summary = ""
@@ -826,8 +831,6 @@ report_sections.append({
             + "\n\nAI Summary (Global): " + global_summary,
     "figs": population_figs + global_figs
 })
-
-
 
 
 # =========================================================
@@ -938,6 +941,7 @@ report_sections.append({
     "text": "\n".join(rates_stats) + "\n\nAI Summary: " + rates_summary,
     "figs": rates_figs
 })
+
 
 # =========================================================
 # 📄 Generate Full PDF Report
