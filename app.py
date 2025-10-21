@@ -664,49 +664,54 @@ st.caption("Data source: RBA Statistical Tables, Yahoo Finance, and CoreLogic. F
 # =========================================================
 st.header("🇦🇺 Australian Population Growth")
 
-aus_pop_figs = []
-aus_pop_stats = []
-aus_pop_summary = ""
+aus_pop_figs, aus_pop_stats, aus_pop_summary = [], [], ""
 
 try:
-    # Load AU population growth CSV
     df_aupop = pd.read_csv("AU_Pop.csv", header=None, names=["Period", "Population"])
-    # Convert 'Period' (e.g., 5-Mar) to datetime, assuming 2025 as year
-    df_aupop["Date"] = pd.to_datetime("2025-" + df_aupop["Period"], format="%Y-%b", errors="coerce")
+    df_aupop["Period"] = df_aupop["Period"].astype(str).str.strip()
+
+    # Auto-detect if day is included
+    if df_aupop["Period"].str.contains(r"\d").any():
+        # Example: '5-Mar' → has day and month
+        df_aupop["Date"] = pd.to_datetime("2025-" + df_aupop["Period"], format="%Y-%d-%b", errors="coerce")
+    else:
+        # Example: 'Mar' → month only
+        df_aupop["Date"] = pd.to_datetime("2025-" + df_aupop["Period"], format="%Y-%b", errors="coerce")
+
     df_aupop = df_aupop.dropna(subset=["Date"])
 
-    # --- Plot ---
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(df_aupop["Date"], df_aupop["Population"], color="tab:blue", linewidth=2)
-    ax.set_title("Australian Population Growth (2025)")
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Population Growth (%)")
-    ax.grid(True, linestyle="--", alpha=0.6)
-    st.pyplot(fig)
-    aus_pop_figs.append(fig)
+    if df_aupop.empty:
+        st.warning("No valid date entries found — check the 'Period' format in AU_Pop.csv.")
+    else:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(df_aupop["Date"], df_aupop["Population"], color="tab:blue", linewidth=2)
+        ax.set_title("Australian Population Growth (2025)")
+        ax.set_xlabel("Month")
+        ax.set_ylabel("Population Growth (%)")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        st.pyplot(fig)
+        aus_pop_figs.append(fig)
 
-    # --- Calculate stats ---
-    if len(df_aupop) > 1:
-        start_val = df_aupop["Population"].iloc[0]
-        end_val = df_aupop["Population"].iloc[-1]
+        # Calculate change
+        start_val, end_val = df_aupop["Population"].iloc[0], df_aupop["Population"].iloc[-1]
         change = end_val - start_val
         aus_pop_stats.append(
             f"Population growth increased from {start_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[0]} "
             f"to {end_val:.2f}% in {df_aupop['Date'].dt.strftime('%b').iloc[-1]} ({change:+.2f} ppts change)."
         )
 
-    aus_pop_summary = explain_with_gpt("\n".join(aus_pop_stats), "Australian Population Growth")
-    st.markdown("**AI Summary (Population):** " + aus_pop_summary)
+        aus_pop_summary = explain_with_gpt("\n".join(aus_pop_stats), "Australian Population Growth")
+        st.markdown("**AI Summary (Population):** " + aus_pop_summary)
 
 except Exception as e:
     st.warning(f"Unable to load Australian population data: {e}")
 
-# Add to PDF report
 report_sections.append({
     "header": "Australian Population Growth",
     "text": "\n".join(aus_pop_stats) + "\n\nAI Summary: " + aus_pop_summary,
     "figs": aus_pop_figs
 })
+
 
 
 # =========================================================
