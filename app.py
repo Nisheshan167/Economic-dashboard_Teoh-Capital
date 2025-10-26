@@ -540,6 +540,46 @@ fx_summary = explain_with_gpt("\n".join(fx_stats), "Exchange Rates")
 st.markdown("**AI Summary (FX):** " + fx_summary)
 markets_stats.extend(fx_stats)
 
+# ---------- Equities ----------
+st.subheader("Equity Indices")
+eq_stats = []
+col1, col2 = st.columns(2)
+with col1:
+    stat, fig = plot_yf("^AXJO", "ASX200 Index")
+    eq_stats.append(stat)
+    markets_figs.append(fig)
+with col2:
+    stat, fig = plot_yf("^GSPC", "S&P500 Index")
+    eq_stats.append(stat)
+    markets_figs.append(fig)
+
+eq_summary = explain_with_gpt("\n".join(eq_stats), "Equity Indices")
+st.markdown("**AI Summary (Equities):** " + eq_summary)
+markets_stats.extend(eq_stats)
+
+# ---------- Combine Summaries ----------
+markets_summary = (
+    "**AI Summary (FX):** " + fx_summary + "\n\n" +
+    "**AI Summary (Equities):** " + eq_summary
+)
+
+# ---------- Add to PDF Export ----------
+combined_markets_figs = []
+for i in range(0, len(markets_figs), 2):
+    if i + 1 < len(markets_figs):
+        combined_markets_figs.append(
+            combine_side_by_side(markets_figs[i], markets_figs[i + 1])
+        )
+    else:
+        combined_markets_figs.append(markets_figs[i])
+
+report_sections.append({
+    "header": "Markets Dashboard (Yahoo Finance)",
+    "text": "\n".join(markets_stats) + "\n\n" + markets_summary,
+    "figs": combined_markets_figs
+})
+
+
 # ---------- Equities YoY Change ----------
 st.subheader("ASX200 vs S&P500 – Year-over-Year Change")
 
@@ -552,25 +592,32 @@ price_data = {}
 
 for name, ticker in tickers.items():
     df = yf.download(ticker, period="2y", interval="1mo")
-    # Handle both single-level and multi-level columns safely
-    if isinstance(df.columns, pd.MultiIndex):
-        df = df["Adj Close"]
-    else:
-        df = df["Adj Close"] if "Adj Close" in df.columns else df["Close"]
-    df = df.resample("M").last()
-    df = df.pct_change(12) * 100  # YoY %
-    price_data[name] = df.rename(name)
 
-# Combine and clean
+    # Handle any Yahoo structure safely
+    if "Adj Close" in df.columns:
+        series = df["Adj Close"]
+    elif "Close" in df.columns:
+        series = df["Close"]
+    else:
+        series = df.iloc[:, 0]
+
+    # Convert to monthly & compute YoY %
+    series = series.resample("M").last()
+    yoy = series.pct_change(12) * 100
+    price_data[name] = yoy.rename(name)
+
+# Combine data
 yoy_df = pd.concat(price_data.values(), axis=1).dropna()
 
-# Plot
+# Plot grouped bar chart
 fig, ax = plt.subplots(figsize=(8, 4))
-yoy_df.plot(kind="bar", ax=ax, alpha=0.8)
+yoy_df.plot(kind="bar", ax=ax, width=0.8, alpha=0.85)
 ax.set_title("ASX200 vs S&P500 – Year-on-Year Monthly % Change")
 ax.set_ylabel("YoY % Change")
 ax.legend()
 plt.xticks(rotation=45)
+
+# Show in Streamlit
 st.pyplot(fig)
 
 # ---------- Add to PDF Export ----------
@@ -579,7 +626,6 @@ report_sections.append({
     "text": "Monthly year-on-year percentage change comparison between ASX200 and S&P500 indices.",
     "figs": [fig]
 })
-
 
 
 # =========================================================
