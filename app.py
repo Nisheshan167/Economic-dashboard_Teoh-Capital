@@ -968,16 +968,7 @@ etf_sector_data = {
 df_etf_sector = pd.DataFrame(etf_sector_data)
 df_etf_sector["+/- Weight"] = df_etf_sector["Fund"] - df_etf_sector["Benchmark"]
 
-# --- Display table ---
-st.dataframe(
-    df_etf_sector.style.format({
-        "Fund": "{:.1f}%", 
-        "Benchmark": "{:.1f}%", 
-        "+/- Weight": "{:+.1f}%"
-    })
-)
-
-# --- Plot Sector Weights ---
+# --- Plot Sector Weights (for both Streamlit and PDF) ---
 fig, ax = plt.subplots(figsize=(8, 5))
 width = 0.35
 x = range(len(df_etf_sector))
@@ -994,9 +985,15 @@ ax.legend()
 st.pyplot(fig)
 
 # --- Add to PDF Export ---
+etf_sector_text = (
+    "Sector allocation comparison for the Vanguard Australian Shares Index ETF (VAS.AX) "
+    "relative to its benchmark. Sector weights are identical at this time, indicating "
+    "no active tilts versus the index."
+)
+
 report_sections.append({
     "header": "Vanguard Australian Shares Index ETF – Sector Allocation",
-    "text": "Sector allocation comparison for the Vanguard Australian Shares Index ETF (VAS.AX) relative to its benchmark.",
+    "text": etf_sector_text,
     "figs": [fig]
 })
 
