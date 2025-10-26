@@ -587,47 +587,53 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def yf_monthly_series(ticker: str) -> pd.Series:
-    """Safely fetch monthly closing prices for a ticker."""
+def fetch_monthly_prices(ticker: str) -> pd.Series:
     df = yf.download(ticker, period="3y", interval="1mo")
-    if df is None or df.empty:
-        return pd.Series(dtype=float, name=ticker)
-    # Pick best available price column
+    if df.empty:
+        return pd.Series(dtype=float)
     col = "Adj Close" if "Adj Close" in df.columns else "Close"
-    s = df[col]
+    s = pd.to_numeric(df[col], errors="coerce")
     s = s.resample("M").last()
     s.name = ticker
-    return s
+    return s.dropna()
 
-# Download data
-asx = yf_monthly_series("^AXJO")
-spx = yf_monthly_series("^GSPC")
+# Get data
+asx = fetch_monthly_prices("^AXJO")
+spx = fetch_monthly_prices("^GSPC")
 
-# Calculate YoY %
+# Compute YoY change
 asx_yoy = asx.pct_change(12) * 100
 spx_yoy = spx.pct_change(12) * 100
 
-# Clean datetime index -> simple month-year labels
-asx_labels = asx_yoy.index.strftime("%b-%y").tolist()
-spx_labels = spx_yoy.index.strftime("%b-%y").tolist()
+# Keep numeric only, align to same months
+asx_yoy = pd.to_numeric(asx_yoy, errors="coerce").dropna()
+spx_yoy = pd.to_numeric(spx_yoy, errors="coerce").dropna()
 
-# ----------- Plot 1: ASX200 -----------
+# Format month labels
+asx_labels = [d.strftime("%b-%y") for d in asx_yoy.index]
+spx_labels = [d.strftime("%b-%y") for d in spx_yoy.index]
+
+# --- Plot ASX200 ---
 fig1, ax1 = plt.subplots(figsize=(8, 4))
-ax1.bar(asx_labels, asx_yoy.values, color="steelblue", alpha=0.8)
+ax1.bar(range(len(asx_yoy)), asx_yoy.values.astype(float),
+        color="steelblue", alpha=0.8)
+ax1.set_xticks(range(len(asx_labels)))
+ax1.set_xticklabels(asx_labels, rotation=45, ha="right")
 ax1.set_title("ASX200 – Year-on-Year Monthly % Change")
 ax1.set_ylabel("YoY % Change")
-plt.xticks(rotation=45)
 st.pyplot(fig1)
 
-# ----------- Plot 2: S&P500 -----------
+# --- Plot S&P500 ---
 fig2, ax2 = plt.subplots(figsize=(8, 4))
-ax2.bar(spx_labels, spx_yoy.values, color="orange", alpha=0.8)
+ax2.bar(range(len(spx_yoy)), spx_yoy.values.astype(float),
+        color="orange", alpha=0.8)
+ax2.set_xticks(range(len(spx_labels)))
+ax2.set_xticklabels(spx_labels, rotation=45, ha="right")
 ax2.set_title("S&P500 – Year-on-Year Monthly % Change")
 ax2.set_ylabel("YoY % Change")
-plt.xticks(rotation=45)
 st.pyplot(fig2)
 
-# ---------- Add to PDF Export ----------
+# --- Add to PDF export ---
 report_sections.append({
     "header": "ASX200 vs S&P500 – YoY Monthly Change",
     "text": "Separate charts showing monthly year-on-year percentage change for ASX200 and S&P500 indices.",
