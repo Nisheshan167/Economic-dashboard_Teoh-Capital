@@ -579,6 +579,43 @@ report_sections.append({
     "figs": combined_markets_figs
 })
 
+# ---------- Equities YoY Change ----------
+st.subheader("ASX200 vs S&P500 – Year-over-Year Change")
+
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Fetch past 2 years of monthly data
+tickers = {"ASX200": "^AXJO", "S&P500": "^GSPC"}
+price_data = {}
+
+for name, ticker in tickers.items():
+    df = yf.download(ticker, period="2y", interval="1mo")["Adj Close"]
+    df = df.resample("M").last()
+    df = df.pct_change(12) * 100  # YoY %
+    price_data[name] = df
+
+# Combine into one DataFrame
+yoy_df = pd.concat(price_data, axis=1).dropna()
+
+# Plot
+fig, ax = plt.subplots(figsize=(8, 4))
+yoy_df.plot(kind="bar", ax=ax, alpha=0.8)
+ax.set_title("ASX200 vs S&P500 – Year-on-Year Monthly % Change")
+ax.set_ylabel("YoY % Change")
+ax.legend()
+plt.xticks(rotation=45)
+
+st.pyplot(fig)
+
+# ---------- Add to PDF Export ----------
+report_sections.append({
+    "header": "ASX200 vs S&P500 – YoY Monthly Change",
+    "text": "Monthly year-on-year percentage change comparison between ASX200 and S&P500 indices.",
+    "figs": [fig]
+})
+
 
 
 # =========================================================
