@@ -588,69 +588,51 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def yf_monthly_series(ticker: str) -> pd.Series:
-    """Safely fetch a monthly price series for a ticker, preferring Adj Close, falling back to Close.
-    Always returns a Series with month-end index."""
+    """Safely fetch monthly closing prices for a ticker."""
     df = yf.download(ticker, period="3y", interval="1mo")
     if df is None or df.empty:
         return pd.Series(dtype=float, name=ticker)
-
-    # Prefer Adj Close, then Close; if multiindex or odd shapes, coerce to Series
-    if "Adj Close" in df.columns:
-        s = df["Adj Close"]
-    elif "Close" in df.columns:
-        s = df["Close"]
-    else:
-        # Take the first value-like column if structure is unexpected
-        s = df.select_dtypes(include=["number"]).iloc[:, 0]
-
-    # If still a DataFrame (can happen when columns come back nested), squeeze to Series
-    if isinstance(s, pd.DataFrame):
-        s = s.iloc[:, 0]
-
-    # Ensure monthly frequency; use last value per month
+    # Pick best available price column
+    col = "Adj Close" if "Adj Close" in df.columns else "Close"
+    s = df[col]
     s = s.resample("M").last()
-
-    # Drop non-finite values
-    s = s[~pd.isna(s) & pd.to_numeric(s, errors="coerce").notna()]
+    s.name = ticker
     return s
 
-tickers = {"ASX200": "^AXJO", "S&P500": "^GSPC"}
-price_series = {name: yf_monthly_series(tkr) for name, tkr in tickers.items()}
+# Download data
+asx = yf_monthly_series("^AXJO")
+spx = yf_monthly_series("^GSPC")
 
-# Compute YoY % change (12-month lookback), coerce each to a named Series
-yoy_series = {}
-for name, s in price_series.items():
-    if s.empty:
-        continue
-    yoy = s.pct_change(12) * 100
-    yoy.name = name  # <-- ensure it's a Series with a proper name
-    yoy_series[name] = yoy
+# Calculate YoY %
+asx_yoy = asx.pct_change(12) * 100
+spx_yoy = spx.pct_change(12) * 100
 
-# Combine to DataFrame and clean
-if yoy_series:
-    yoy_df = pd.concat(yoy_series.values(), axis=1).dropna(how="all")
-else:
-    yoy_df = pd.DataFrame(columns=list(tickers.keys()))
+# Clean datetime index -> month-year labels
+asx_yoy.index = asx_yoy.index.strftime("%b-%y")
+spx_yoy.index = spx_yoy.index.strftime("%b-%y")
 
-# Guard against empty plot
-if yoy_df.empty:
-    st.info("YoY data not available at the moment for ASX200/S&P500.")
-else:
-    # Grouped bar chart (months on X, two bars per month)
-    fig, ax = plt.subplots(figsize=(8, 4))
-    yoy_df.plot(kind="bar", ax=ax, width=0.8, alpha=0.85)
-    ax.set_title("ASX200 vs S&P500 – Year-on-Year Monthly % Change")
-    ax.set_ylabel("YoY % Change")
-    ax.legend()
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
+# ----------- Plot 1: ASX200 -----------
+fig1, ax1 = plt.subplots(figsize=(8, 4))
+ax1.bar(asx_yoy.index, asx_yoy, color="steelblue", alpha=0.8)
+ax1.set_title("ASX200 – Year-on-Year Monthly % Change")
+ax1.set_ylabel("YoY % Change")
+plt.xticks(rotation=45)
+st.pyplot(fig1)
 
-    # ---------- Add to PDF Export ----------
-    report_sections.append({
-        "header": "ASX200 vs S&P500 – YoY Monthly Change",
-        "text": "Monthly year-on-year percentage change comparison between ASX200 and S&P500 indices.",
-        "figs": [fig]
-    })
+# ----------- Plot 2: S&P500 -----------
+fig2, ax2 = plt.subplots(figsize=(8, 4))
+ax2.bar(spx_yoy.index, spx_yoy, color="orange", alpha=0.8)
+ax2.set_title("S&P500 – Year-on-Year Monthly % Change")
+ax2.set_ylabel("YoY % Change")
+plt.xticks(rotation=45)
+st.pyplot(fig2)
+
+# ---------- Add to PDF Export ----------
+report_sections.append({
+    "header": "ASX200 vs S&P500 – YoY Monthly Change",
+    "text": "Separate charts showing monthly year-on-year percentage change for ASX200 and S&P500 indices.",
+    "figs": [fig1, fig2]
+})
 
 
 # =========================================================
