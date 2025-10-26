@@ -540,45 +540,6 @@ fx_summary = explain_with_gpt("\n".join(fx_stats), "Exchange Rates")
 st.markdown("**AI Summary (FX):** " + fx_summary)
 markets_stats.extend(fx_stats)
 
-# ---------- Equities ----------
-st.subheader("Equity Indices")
-eq_stats = []
-col1, col2 = st.columns(2)
-with col1:
-    stat, fig = plot_yf("^AXJO", "ASX200 Index")
-    eq_stats.append(stat)
-    markets_figs.append(fig)
-with col2:
-    stat, fig = plot_yf("^GSPC", "S&P500 Index")
-    eq_stats.append(stat)
-    markets_figs.append(fig)
-
-eq_summary = explain_with_gpt("\n".join(eq_stats), "Equity Indices")
-st.markdown("**AI Summary (Equities):** " + eq_summary)
-markets_stats.extend(eq_stats)
-
-# ---------- Combine Summaries ----------
-markets_summary = (
-    "**AI Summary (FX):** " + fx_summary + "\n\n" +
-    "**AI Summary (Equities):** " + eq_summary
-)
-
-# ---------- Add to PDF Export ----------
-combined_markets_figs = []
-for i in range(0, len(markets_figs), 2):
-    if i + 1 < len(markets_figs):
-        combined_markets_figs.append(
-            combine_side_by_side(markets_figs[i], markets_figs[i + 1])
-        )
-    else:
-        combined_markets_figs.append(markets_figs[i])
-
-report_sections.append({
-    "header": "Markets Dashboard (Yahoo Finance)",
-    "text": "\n".join(markets_stats) + "\n\n" + markets_summary,
-    "figs": combined_markets_figs
-})
-
 # ---------- Equities YoY Change ----------
 st.subheader("ASX200 vs S&P500 – Year-over-Year Change")
 
@@ -586,18 +547,22 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Fetch past 2 years of monthly data
 tickers = {"ASX200": "^AXJO", "S&P500": "^GSPC"}
 price_data = {}
 
 for name, ticker in tickers.items():
-    df = yf.download(ticker, period="2y", interval="1mo")["Adj Close"]
+    df = yf.download(ticker, period="2y", interval="1mo")
+    # Handle both single-level and multi-level columns safely
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df["Adj Close"]
+    else:
+        df = df["Adj Close"] if "Adj Close" in df.columns else df["Close"]
     df = df.resample("M").last()
     df = df.pct_change(12) * 100  # YoY %
-    price_data[name] = df
+    price_data[name] = df.rename(name)
 
-# Combine into one DataFrame
-yoy_df = pd.concat(price_data, axis=1).dropna()
+# Combine and clean
+yoy_df = pd.concat(price_data.values(), axis=1).dropna()
 
 # Plot
 fig, ax = plt.subplots(figsize=(8, 4))
@@ -606,7 +571,6 @@ ax.set_title("ASX200 vs S&P500 – Year-on-Year Monthly % Change")
 ax.set_ylabel("YoY % Change")
 ax.legend()
 plt.xticks(rotation=45)
-
 st.pyplot(fig)
 
 # ---------- Add to PDF Export ----------
