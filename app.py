@@ -607,13 +607,13 @@ spx = yf_monthly_series("^GSPC")
 asx_yoy = asx.pct_change(12) * 100
 spx_yoy = spx.pct_change(12) * 100
 
-# Clean datetime index -> month-year labels
-asx_yoy.index = asx_yoy.index.strftime("%b-%y")
-spx_yoy.index = spx_yoy.index.strftime("%b-%y")
+# Clean datetime index -> simple month-year labels
+asx_labels = asx_yoy.index.strftime("%b-%y").tolist()
+spx_labels = spx_yoy.index.strftime("%b-%y").tolist()
 
 # ----------- Plot 1: ASX200 -----------
 fig1, ax1 = plt.subplots(figsize=(8, 4))
-ax1.bar(asx_yoy.index, asx_yoy, color="steelblue", alpha=0.8)
+ax1.bar(asx_labels, asx_yoy.values, color="steelblue", alpha=0.8)
 ax1.set_title("ASX200 – Year-on-Year Monthly % Change")
 ax1.set_ylabel("YoY % Change")
 plt.xticks(rotation=45)
@@ -621,7 +621,7 @@ st.pyplot(fig1)
 
 # ----------- Plot 2: S&P500 -----------
 fig2, ax2 = plt.subplots(figsize=(8, 4))
-ax2.bar(spx_yoy.index, spx_yoy, color="orange", alpha=0.8)
+ax2.bar(spx_labels, spx_yoy.values, color="orange", alpha=0.8)
 ax2.set_title("S&P500 – Year-on-Year Monthly % Change")
 ax2.set_ylabel("YoY % Change")
 plt.xticks(rotation=45)
