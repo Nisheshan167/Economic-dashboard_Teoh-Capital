@@ -902,7 +902,7 @@ report_sections.append({
 
 
 # =========================================================
-# 🇦🇺 Vanguard Australian Shares Index ETF (VAS.AX)
+# Vanguard Australian Shares Index ETF (VAS.AX)
 # =========================================================
 st.header("🇦🇺 Vanguard Australian Shares Index ETF (VAS.AX) — 5-Year Indexed Performance")
 
@@ -948,6 +948,57 @@ report_sections.append({
     "figs": vas_figs
 })
 
+# ---------- ETF Sector Allocation ----------
+st.subheader("Vanguard Australian Shares Index ETF – Sector Allocation")
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# --- Data ---
+etf_sector_data = {
+    "Sector": [
+        "Financials", "Materials", "Consumer Discretionary", "Health Care",
+        "Industrials", "Real Estate", "Communication Services",
+        "Information Technology", "Energy", "Consumer Staples", "Utilities"
+    ],
+    "Fund": [33.2, 20.4, 8.2, 7.9, 7.6, 6.8, 3.9, 3.7, 3.5, 3.4, 1.4],
+    "Benchmark": [33.2, 20.4, 8.2, 7.9, 7.6, 6.8, 3.9, 3.7, 3.5, 3.4, 1.4],
+}
+
+df_etf_sector = pd.DataFrame(etf_sector_data)
+df_etf_sector["+/- Weight"] = df_etf_sector["Fund"] - df_etf_sector["Benchmark"]
+
+# --- Display table ---
+st.dataframe(
+    df_etf_sector.style.format({
+        "Fund": "{:.1f}%", 
+        "Benchmark": "{:.1f}%", 
+        "+/- Weight": "{:+.1f}%"
+    })
+)
+
+# --- Plot Sector Weights ---
+fig, ax = plt.subplots(figsize=(8, 5))
+width = 0.35
+x = range(len(df_etf_sector))
+
+ax.bar(x, df_etf_sector["Fund"], width, label="Fund", color="steelblue", alpha=0.8)
+ax.bar([i + width for i in x], df_etf_sector["Benchmark"], width, label="Benchmark", color="orange", alpha=0.8)
+
+ax.set_xticks([i + width / 2 for i in x])
+ax.set_xticklabels(df_etf_sector["Sector"], rotation=45, ha="right")
+ax.set_ylabel("Weight (%)")
+ax.set_title("Sector Allocation – Fund vs Benchmark")
+ax.legend()
+
+st.pyplot(fig)
+
+# --- Add to PDF Export ---
+report_sections.append({
+    "header": "Vanguard Australian Shares Index ETF – Sector Allocation",
+    "text": "Sector allocation comparison for the Vanguard Australian Shares Index ETF (VAS.AX) relative to its benchmark.",
+    "figs": [fig]
+})
 
 # =========================================================
 # 🌍 Global Central Bank Policy Rates
