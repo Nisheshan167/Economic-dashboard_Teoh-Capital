@@ -587,45 +587,70 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 
-tickers = {"ASX200": "^AXJO", "S&P500": "^GSPC"}
-price_data = {}
+def yf_monthly_series(ticker: str) -> pd.Series:
+    """Safely fetch a monthly price series for a ticker, preferring Adj Close, falling back to Close.
+    Always returns a Series with month-end index."""
+    df = yf.download(ticker, period="3y", interval="1mo")
+    if df is None or df.empty:
+        return pd.Series(dtype=float, name=ticker)
 
-for name, ticker in tickers.items():
-    df = yf.download(ticker, period="2y", interval="1mo")
-
-    # Handle any Yahoo structure safely
+    # Prefer Adj Close, then Close; if multiindex or odd shapes, coerce to Series
     if "Adj Close" in df.columns:
-        series = df["Adj Close"]
+        s = df["Adj Close"]
     elif "Close" in df.columns:
-        series = df["Close"]
+        s = df["Close"]
     else:
-        series = df.iloc[:, 0]
+        # Take the first value-like column if structure is unexpected
+        s = df.select_dtypes(include=["number"]).iloc[:, 0]
 
-    # Convert to monthly & compute YoY %
-    series = series.resample("M").last()
-    yoy = series.pct_change(12) * 100
-    price_data[name] = yoy.rename(name)
+    # If still a DataFrame (can happen when columns come back nested), squeeze to Series
+    if isinstance(s, pd.DataFrame):
+        s = s.iloc[:, 0]
 
-# Combine data
-yoy_df = pd.concat(price_data.values(), axis=1).dropna()
+    # Ensure monthly frequency; use last value per month
+    s = s.resample("M").last()
 
-# Plot grouped bar chart
-fig, ax = plt.subplots(figsize=(8, 4))
-yoy_df.plot(kind="bar", ax=ax, width=0.8, alpha=0.85)
-ax.set_title("ASX200 vs S&P500 – Year-on-Year Monthly % Change")
-ax.set_ylabel("YoY % Change")
-ax.legend()
-plt.xticks(rotation=45)
+    # Drop non-finite values
+    s = s[~pd.isna(s) & pd.to_numeric(s, errors="coerce").notna()]
+    return s
 
-# Show in Streamlit
-st.pyplot(fig)
+tickers = {"ASX200": "^AXJO", "S&P500": "^GSPC"}
+price_series = {name: yf_monthly_series(tkr) for name, tkr in tickers.items()}
 
-# ---------- Add to PDF Export ----------
-report_sections.append({
-    "header": "ASX200 vs S&P500 – YoY Monthly Change",
-    "text": "Monthly year-on-year percentage change comparison between ASX200 and S&P500 indices.",
-    "figs": [fig]
-})
+# Compute YoY % change (12-month lookback), coerce each to a named Series
+yoy_series = {}
+for name, s in price_series.items():
+    if s.empty:
+        continue
+    yoy = s.pct_change(12) * 100
+    yoy.name = name  # <-- ensure it's a Series with a proper name
+    yoy_series[name] = yoy
+
+# Combine to DataFrame and clean
+if yoy_series:
+    yoy_df = pd.concat(yoy_series.values(), axis=1).dropna(how="all")
+else:
+    yoy_df = pd.DataFrame(columns=list(tickers.keys()))
+
+# Guard against empty plot
+if yoy_df.empty:
+    st.info("YoY data not available at the moment for ASX200/S&P500.")
+else:
+    # Grouped bar chart (months on X, two bars per month)
+    fig, ax = plt.subplots(figsize=(8, 4))
+    yoy_df.plot(kind="bar", ax=ax, width=0.8, alpha=0.85)
+    ax.set_title("ASX200 vs S&P500 – Year-on-Year Monthly % Change")
+    ax.set_ylabel("YoY % Change")
+    ax.legend()
+    plt.xticks(rotation=45)
+    st.pyplot(fig)
+
+    # ---------- Add to PDF Export ----------
+    report_sections.append({
+        "header": "ASX200 vs S&P500 – YoY Monthly Change",
+        "text": "Monthly year-on-year percentage change comparison between ASX200 and S&P500 indices.",
+        "figs": [fig]
+    })
 
 
 # =========================================================
