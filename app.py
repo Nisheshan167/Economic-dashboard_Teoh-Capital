@@ -589,7 +589,7 @@ import matplotlib.pyplot as plt
 
 def fetch_monthly_prices(ticker: str) -> pd.Series:
     """Fetch monthly closing prices from Yahoo Finance, handling multi-index safely."""
-    df = yf.download(ticker, period="3y", interval="1mo")
+    df = yf.download(ticker, period="2y", interval="1mo")
     if df.empty:
         return pd.Series(dtype=float, name=ticker)
 
